@@ -131,10 +131,16 @@ h1 i{font-style:italic;color:var(--dim)}
   color:var(--faint);text-transform:uppercase;position:sticky;top:0;background:var(--panel);
   border-bottom:1px solid var(--rule);z-index:1}
 .dleg b{color:var(--dim);font-weight:400;letter-spacing:.09em}
-.opt{display:flex;width:100%;gap:13px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.04);
-  border-left:2px solid transparent;align-items:flex-start}
-.opt:hover{background:var(--panel-2)}
-.opt[aria-pressed="true"]{background:var(--panel-2);border-left-color:var(--text)}
+.optrow{display:flex;align-items:stretch;border-bottom:1px solid rgba(255,255,255,.04);
+  border-left:2px solid transparent}
+.optrow:hover{background:var(--panel-2)}
+.optrow.on{background:var(--panel-2);border-left-color:var(--text)}
+.opt{display:flex;flex:1;min-width:0;gap:13px;padding:10px 6px 10px 20px;align-items:flex-start}
+.book{display:flex;align-items:center;padding:0 16px 0 8px;flex:none;text-decoration:none;
+  font-family:var(--f-mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);border-left:1px solid rgba(255,255,255,.05)}
+.book:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.book span{white-space:nowrap}
 .opt .p{font-family:var(--f-mono);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;
   min-width:62px;letter-spacing:-.01em}
 .opt .w{flex:1;min-width:0}
@@ -727,6 +733,16 @@ var detail = {dest:null, cab:'e', mode:'cheap', sel:null};
 var drawerEl = document.getElementById('drawer');
 
 function hhmm(m){ return Math.floor(m/60) + 'h' + ('0' + (m%60)).slice(-2); }
+
+var CABIN_WORD = {e:'economy', p:'premium economy', b:'business'};
+function searchUrl(dest, o){
+  var from = o.lg === 'out' ? ORIGIN : dest;
+  var to   = o.lg === 'out' ? dest : ORIGIN;
+  var q = 'Flights from ' + from + ' to ' + to + ' on ' + o.d +
+          ' one way ' + (CABIN_WORD[o.cb] || 'economy') +
+          (o.st === 0 ? ' nonstop' : '');
+  return 'https://www.google.com/travel/flights?q=' + encodeURIComponent(q);
+}
 function clockOf(x){ return (x || ' ').split(' ')[1] || ''; }
 function dayShift(dp, ar){
   /* the two tables timestamp differently: fixed-date rows carry
@@ -828,10 +844,11 @@ function renderOptions(id, opts){
     h.innerHTML = L[1] + ' <b>' + niceDate(list[0].d) + ' \u00B7 ' + list.length + ' options</b>';
     body.appendChild(h);
     list.forEach(function(o){
+      var row = document.createElement('div');
+      row.className = 'optrow';
       var b = document.createElement('button');
       b.className = 'opt' + (o === pickCheap ? ' cheap' : '');
       b.type = 'button';
-      b.setAttribute('aria-pressed','false');
       var via = o.v.length ? 'via ' + o.v.join(', ') : '<i class="ns2">nonstop</i>';
       var pills = '';
       if(list.length >= 3){
@@ -848,14 +865,24 @@ function renderOptions(id, opts){
           '<sup>' + dayShift(o.dp, o.ar) + '</sup></div></div>';
       b.addEventListener('click', function(){
         var was = (detail.sel === o);
-        Array.prototype.forEach.call(body.querySelectorAll('.opt'), function(x){
-          x.setAttribute('aria-pressed','false');
+        Array.prototype.forEach.call(body.querySelectorAll('.optrow'), function(x){
+          x.classList.remove('on');
         });
         detail.sel = was ? null : o;
-        b.setAttribute('aria-pressed', was ? 'false' : 'true');
+        if(!was) row.classList.add('on');
         highlight(was ? null : o);
       });
-      body.appendChild(b);
+
+      var link = document.createElement('a');
+      link.className = 'book';
+      link.href = searchUrl(id, o);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.title = 'Open this leg on Google Flights';
+      link.innerHTML = '<span>Book &#8599;</span>';
+      row.appendChild(b);
+      row.appendChild(link);
+      body.appendChild(row);
     });
   });
   body.scrollTop = 0;

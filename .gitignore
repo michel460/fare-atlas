@@ -10,5 +10,6 @@ benchmark_*.json
 __pycache__/
 *.pyc
 *.bak
+*.prev
 *.bak-*
 .env

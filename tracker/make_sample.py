@@ -45,20 +45,25 @@ CAB = {"economy": "e", "premium-economy": "p", "business": "b"}
 MULT = {"e": 1.0, "p": 1.9, "b": 4.1}
 
 
-def clock(h, m):
-    return "%02d-%02d %02d:%02d" % (random.randint(1, 12), random.randint(1, 28), h, m)
+def stamp(date, minutes_from_midnight):
+    """MM-DD HH:MM, derived from the leg date so departure and arrival stay
+    consistent with the duration between them."""
+    base = datetime.datetime.combine(datetime.date.fromisoformat(date), datetime.time())
+    t = base + datetime.timedelta(minutes=minutes_from_midnight)
+    return "%02d-%02d %02d:%02d" % (t.month, t.day, t.hour, t.minute)
 
 
 def itinerary(trip, leg, cab, date):
     via = random.choice(trip["hubs"])
     stops = len(via)
     price = int(trip["base"] * MULT[cab] * random.uniform(0.86, 1.55) - stops * 40)
-    mins = (7 + stops * 4) * 60 + random.randint(0, 200) + (2 if trip["id"] == "CPT" else 0) * 300
-    dep_h, dep_m = random.randint(0, 23), random.choice([0, 15, 30, 45])
-    arr_h = (dep_h + mins // 60) % 24
+    mins = (7 + stops * 4) * 60 + random.randint(0, 200)
+    if trip["id"] == "CPT":
+        mins += 300
+    dep = random.randint(0, 23) * 60 + random.choice([0, 15, 30, 45])
     return dict(lg=leg, cb=cab, p=price, al="/".join(random.sample(CARRIERS, 1 + (stops > 1))),
                 st=stops, v=via, m=mins, ly=stops * random.randint(70, 400), d=date,
-                dp=clock(dep_h, dep_m), ar=clock(arr_h, dep_m))
+                dp=stamp(date, dep), ar=stamp(date, dep + mins))
 
 
 def main(out_dir):

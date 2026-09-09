@@ -7,7 +7,7 @@ It grew out of a specific problem. I live on an island with almost no long-haul
 service, so every trip is a connection, and "is this a good price?" is not a
 question one search answers. It needs a baseline, and a baseline needs history.
 
-![The globe, showing seven destinations and the hubs between them](docs/screenshot.png)
+![The viewer, running on the bundled sample data](docs/screenshot.png)
 
 ## What it does
 
@@ -27,7 +27,40 @@ tells you when the fare goes under.
 **Draws it.** The viewer is a globe with a great-circle arc per routing. Click a
 destination for every itinerary priced today, ranked by cheapest, fastest, or a
 balance of the two, with the stopovers marked on the map and the layover written
-into the hub's label.
+into the hub's label. Every row links straight out to that search on Google
+Flights, so finding a fare and going to book it are the same gesture.
+
+## Managing what it tracks
+
+```bash
+cd tracker
+
+python3 destinations.py list
+
+# a place you want to go, whenever it is cheap enough
+python3 destinations.py watch SYD --city Sydney --why friends \
+        --nights 10 --target 450
+
+# ...or pinned to a month rather than a rolling horizon
+python3 destinations.py watch CPT --city "Cape Town" \
+        --window 2027-06-01 2027-06-30 --nights 14 --target 1100
+
+# a trip you already have dates for, with three days either side
+python3 destinations.py trip LHR --city London \
+        --out 2027-03-04 --ret 2027-03-18 --flex 3 \
+        --cabins economy,business
+
+python3 destinations.py disable SYD     # keep the history, stop pricing it
+python3 destinations.py remove  SYD
+```
+
+`config.yaml` is edited as text rather than parsed and rewritten. A YAML
+round-trip would drop every comment in it, and the comments are where the
+reasoning lives. Each write is validated by reparsing and rolled back if the
+result would not load, because a tracker that cannot read its config does not
+run at all.
+
+Nothing else needs restarting. The next run picks up the change.
 
 ## Two readers, and why
 
@@ -100,6 +133,7 @@ tracker/
   watchlist.py     no-date destinations: sweep, refine, alert on a price worth taking
   flights.py       keyless Google Flights one-way reader
   parse_gf_md.py   fallback parser for pages that only render client-side
+  destinations.py  add, remove, enable and list what is tracked
   export_globe.py  database -> the two JSON files the viewer reads
   make_sample.py   generates the sample dataset
   run.sh           cron entry point
