@@ -1,0 +1,14 @@
+# Never commit real trips or real fares: config.yaml holds actual travel dates
+# and jump-on prices, and fares.db holds a personal itinerary history.
+config.yaml
+*.db
+*.db-*
+logs/
+snap_*.json
+benchmark_*.json
+.venv/
+__pycache__/
+*.pyc
+*.bak
+*.bak-*
+.env

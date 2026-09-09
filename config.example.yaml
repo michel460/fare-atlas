@@ -1,0 +1,99 @@
+# Fare Atlas — example configuration.
+#
+# Copy to config.yaml and edit. config.yaml is gitignored, because it holds
+# where you are actually going and what you are willing to pay.
+#
+# Two kinds of destination:
+#   trips     — you know the dates. Priced every morning, alerts on movement.
+#   watchlist — you know the place, not the dates. Swept for a fare worth taking.
+
+origin: SIN                      # every trip is priced from here
+adults: 1                        # prices below are PER PERSON
+currency: USD
+
+alert_threshold_pct: 7           # notify when a fixed-date total moves this much
+quality_max_layover_min: 360     # a "quality" option keeps every layover under 6h
+digest_weekday: 6                # Python weekday, 6 = Sunday
+run_hour_sgt: 7
+
+# What the viewer puts at the top. Kept here so the viewer itself carries no
+# personal detail and can be published unchanged.
+page:
+  title: "Fare Atlas"
+  headline: "Nine hours to anywhere worth going."
+  headline_em: "And the price of not waiting."
+  origin_label: "SIN Singapore"
+
+# ---------------------------------------------------------------- fixed dates
+trips:
+  - id: LHR
+    name: Singapore -> London
+    origin: SIN
+    dest: LHR
+    city: London
+    colour: "#6FD9CF"            # optional; otherwise assigned from a palette
+    when: "4 to 18 Mar 2027"
+    why: ""
+    out: {core: "2027-03-04", window: ["2027-03-02", "2027-03-03", "2027-03-05", "2027-03-06"]}
+    ret: {core: "2027-03-18", window: ["2027-03-16", "2027-03-17", "2027-03-19", "2027-03-20"]}
+    cabins: [economy, premium-economy, business]
+    max_stops: 1
+    source: serpapi              # true round-trip pricing plus Google's price insights
+    serpapi_stops: 2
+    fallback: fastflights        # keyless reader if SerpAPI fails or runs dry
+    # Flexible dates on a metered API get expensive fast: four extra dates per
+    # leg across three cabins is 24 searches a day. Pricing them with the free
+    # reader instead means they can run EVERY day rather than once a week,
+    # while the core date keeps SerpAPI for its price insights.
+    window_source: fastflights
+    notes: "Northbound demand peaks either side of Easter."
+
+  - id: NRT
+    name: Singapore -> Tokyo
+    origin: SIN
+    dest: NRT
+    city: Tokyo
+    colour: "#F0A44A"
+    when: "1 to 9 Apr 2027"
+    why: "cherry blossom"
+    out: {core: "2027-04-01", window: []}      # fixed: no flexibility on this one
+    ret: {core: "2027-04-09", window: []}
+    cabins: [economy, premium-economy]
+    max_stops: 1
+    source: fastflights
+    notes: "Blossom week is the whole point, so the dates do not move."
+
+# ------------------------------------------------------------- no dates yet
+# Swept with the keyless reader, so these cost no API quota at all. Each run,
+# one destination takes its turn at a full-horizon sweep to find the cheap
+# month; the rest refine around their best known departure to find the cheap
+# week inside it.
+watchlist_sweep_samples: 5       # dates spread across the horizon on a sweep
+watchlist_refine_samples: 1      # nearby dates when refining
+watchlist_new_low_pct: 3.0       # ignore a "new low" smaller than this
+watchlist_new_low_abs: 25
+
+watchlist:
+  - id: SYD
+    name: Singapore -> Sydney
+    dest: SYD
+    city: Sydney
+    colour: "#B9DE55"
+    why: "friends"
+    nights: 10
+    horizon_days: [30, 300]      # rolling window, relative to today
+    target_rt: 450               # tell me when a round trip drops under this
+    max_stops: 1
+    enabled: true
+
+  - id: CPT
+    name: Singapore -> Cape Town
+    dest: CPT
+    city: Cape Town
+    colour: "#A78BFA"
+    why: "a long way off"
+    nights: 14
+    window: ["2027-06-01", "2027-06-30"]   # a month, not a rolling horizon
+    target_rt: 1100
+    max_stops: 2
+    enabled: true

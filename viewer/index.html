@@ -1,0 +1,1101 @@
+<title>Fare Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#07090F;
+  --panel:#0C1017;
+  --panel-2:#111722;
+  --rule:rgba(255,255,255,0.075);
+  --rule-2:rgba(255,255,255,0.15);
+  --text:#E8ECF4;
+  --dim:#7C879B;
+  --faint:#525C6E;
+  --sig-best:#6FD9CF;
+  --sig-rise:#F0A44A;
+  --sig-note:#A78BFA;
+  --sig-alt:#F2789B;
+  --sig-good:#B9DE55;
+  --sig-fast:#5EA8F0;
+  --sig-warm:#F26B5E;
+  --f-display:'Instrument Serif','Iowan Old Style',Georgia,serif;
+  --f-body:'IBM Plex Sans','Helvetica Neue',Helvetica,Arial,sans-serif;
+  --f-mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--ground);color:var(--text);font-family:var(--f-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}
+:focus-visible{outline:2px solid var(--sig-best);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 372px;grid-template-rows:auto minmax(0,1fr) auto;height:100dvh;min-height:640px}
+
+/* header */
+.head{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:24px;
+  padding:11px 24px 12px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:400;font-size:22px;line-height:1.15;letter-spacing:-.01em;margin:0}
+h1 i{font-style:italic;color:var(--dim)}
+.stamp{flex:none;font-family:var(--f-mono);font-size:10px;color:var(--faint);letter-spacing:.04em}
+
+/* globe */
+.stage{grid-column:1;grid-row:2;position:relative;min-height:0;overflow:hidden;border-right:1px solid var(--rule)}
+#gl{display:block;width:100%;height:100%}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lb{position:absolute;transform:translate(7px,-50%);font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;white-space:nowrap;transition:opacity .18s}
+.lb span{display:block;padding-left:9px;border-left:1px solid currentColor;line-height:1.25}
+.lb em{font-style:normal;display:block;font-size:8.5px;letter-spacing:.08em;opacity:.6}
+.lb.hub{font-size:9px;color:var(--faint)}
+.tools{position:absolute;left:22px;bottom:18px;display:flex;gap:8px;align-items:center}
+.tg{font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;border:1px solid var(--rule);padding:8px 13px;color:var(--dim);transition:.15s}
+.tg:hover{color:var(--text);border-color:var(--rule-2)}
+.tg[aria-pressed="true"]{color:var(--ground);background:var(--text);border-color:var(--text)}
+.spin{position:absolute;right:22px;bottom:18px;font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;color:var(--faint);text-transform:uppercase;pointer-events:none}
+.boot{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-mono);font-size:11px;letter-spacing:.2em;color:var(--faint);text-transform:uppercase;background:var(--ground);transition:opacity .5s}
+.boot[hidden]{display:none}
+
+/* rail */
+.rail{grid-column:2;grid-row:2;overflow-y:auto;min-height:0;background:var(--panel)}
+.card{display:block;width:100%;padding:16px 20px;border-bottom:1px solid var(--rule);border-left:2px solid transparent;transition:background .18s,border-color .18s}
+.card:hover{background:var(--panel-2)}
+.card[aria-pressed="true"]{background:var(--panel-2);border-left-color:var(--c)}
+.card .iata{color:var(--c)}
+.ct{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.city{font-family:var(--f-display);font-size:25px;line-height:1.1}
+.iata{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em}
+.when{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;color:var(--faint);margin-top:5px}
+.big{display:flex;align-items:flex-end;gap:11px;margin-top:13px}
+.px{font-family:var(--f-mono);font-size:27px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}
+.mv{font-family:var(--f-mono);font-size:11px;font-variant-numeric:tabular-nums;padding-bottom:2px}
+.mv.up{color:var(--sig-rise)} .mv.dn{color:var(--sig-best)} .mv.fl{color:var(--faint)}
+.spk{margin-top:11px;display:block;width:100%;height:34px}
+.leg{font-size:12px;color:var(--dim);margin-top:11px;line-height:1.5}
+.leg b{color:var(--text);font-weight:500;font-family:var(--f-mono);font-size:11.5px}
+.leg > b:first-child{color:var(--dim);font-weight:400}
+.cab{display:flex;gap:14px;margin-top:12px;padding-top:11px;border-top:1px solid var(--rule);flex-wrap:wrap}
+.cab div{min-width:0}
+.cab dt{font-family:var(--f-mono);font-size:8.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
+.cab dd{margin:3px 0 0;font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.cab dd.none{color:var(--faint);font-size:11px}
+.railbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;
+  padding:11px 20px;background:var(--panel);border-bottom:1px solid var(--rule-2)}
+.railbar span{font-family:var(--f-mono);font-size:9px;letter-spacing:.18em;color:var(--faint);text-transform:uppercase}
+.railbar .seg2{display:flex;border:1px solid var(--rule);margin-left:auto}
+.railbar button{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);padding:6px 12px;border-right:1px solid var(--rule)}
+.railbar button:last-child{border-right:0}
+.railbar button:hover{color:var(--dim)}
+.railbar button[aria-pressed="true"]{color:var(--ground);background:var(--text)}
+.trade{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);margin-top:6px;letter-spacing:.02em}
+.trade b{color:var(--dim);font-weight:400}
+.hrs{font-family:var(--f-mono);font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;padding-bottom:2px}
+.opt .t{font-family:var(--f-mono);font-size:10px;color:var(--dim);margin-top:3px;letter-spacing:.02em}
+.opt .t sup{font-size:8px;color:var(--faint)}
+.grp{padding:13px 20px 9px;font-family:var(--f-mono);font-size:9px;letter-spacing:.2em;
+  color:var(--faint);text-transform:uppercase;border-bottom:1px solid var(--rule);background:#0A0E15}
+.grp span{color:var(--dim)}
+.state{display:inline-block;font-family:var(--f-mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+  padding:2px 7px;margin-left:8px;vertical-align:2px;border:1px solid currentColor}
+.state.buy{color:var(--sig-good)}
+.state.wait{color:var(--faint)}
+.ns{display:inline-block;font-family:var(--f-mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;
+  padding:2px 7px;margin-left:8px;vertical-align:2px;background:rgba(255,255,255,.09);color:var(--text)}
+.pend{font-size:12px;color:var(--faint);margin-top:12px;line-height:1.5;border-top:1px solid var(--rule);padding-top:12px}
+.pend b{color:var(--sig-note);font-weight:500}
+
+/* detail drawer */
+.drawer{position:absolute;left:0;top:0;bottom:0;width:min(476px,64%);background:var(--panel);
+  border-right:1px solid var(--rule-2);z-index:6;display:flex;flex-direction:column;
+  transform:translateX(-101%);transition:transform .30s cubic-bezier(.22,.8,.28,1);
+  box-shadow:26px 0 60px rgba(0,0,0,.55)}
+.drawer.on{transform:none}
+.dh{padding:16px 20px 0;border-bottom:1px solid var(--rule)}
+.dh-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.dh .city{font-family:var(--f-display);font-size:29px;line-height:1.05}
+.dh .meta{font-family:var(--f-mono);font-size:10px;letter-spacing:.09em;color:var(--faint);margin-top:5px}
+.dx{font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;color:var(--dim);
+  border:1px solid var(--rule);padding:6px 11px;flex:none}
+.dx:hover{color:var(--text);border-color:var(--rule-2)}
+.tabs{display:flex;gap:0;margin-top:14px}
+.tab{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);padding:9px 12px;border-bottom:2px solid transparent}
+.tab:hover{color:var(--dim)}
+.tab[aria-pressed="true"]{color:var(--text);border-bottom-color:currentColor}
+.dsort{margin-left:auto;display:flex;align-items:center;gap:9px;padding-bottom:6px}
+.dsort span{font-family:var(--f-mono);font-size:9px;letter-spacing:.13em;color:var(--faint);text-transform:uppercase}
+.dsort button{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.09em;color:var(--faint)}
+.dsort button[aria-pressed="true"]{color:var(--text)}
+.dbody{overflow-y:auto;flex:1;min-height:0}
+.dleg{padding:12px 20px 7px;font-family:var(--f-mono);font-size:9px;letter-spacing:.19em;
+  color:var(--faint);text-transform:uppercase;position:sticky;top:0;background:var(--panel);
+  border-bottom:1px solid var(--rule);z-index:1}
+.dleg b{color:var(--dim);font-weight:400;letter-spacing:.09em}
+.opt{display:flex;width:100%;gap:13px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.04);
+  border-left:2px solid transparent;align-items:flex-start}
+.opt:hover{background:var(--panel-2)}
+.opt[aria-pressed="true"]{background:var(--panel-2);border-left-color:var(--text)}
+.opt .p{font-family:var(--f-mono);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;
+  min-width:62px;letter-spacing:-.01em}
+.opt .w{flex:1;min-width:0}
+.opt .a{font-size:12.5px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt .d{font-family:var(--f-mono);font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.04em}
+.opt .d i{font-style:normal;color:var(--dim)}
+.opt .ns2{color:var(--sig-good)}
+.opt.cheap .p{color:var(--sig-good)}
+.tag{display:inline-block;font-family:var(--f-mono);font-size:8px;letter-spacing:.13em;
+  text-transform:uppercase;padding:1px 5px;margin-left:6px;vertical-align:1px;border:1px solid currentColor}
+.tag.best{color:var(--sig-best)} .tag.fast{color:var(--sig-fast)} .tag.cheapest{color:var(--sig-good)}
+.lb.stop{color:#FFFFFF !important;font-size:10px;z-index:2}
+.lb.stop span{border-left-width:2px}
+.lb.stop em{opacity:.85;color:var(--sig-good)}
+.dempty{padding:26px 20px;color:var(--faint);font-size:12.5px;line-height:1.5}
+@media (max-width:1020px){ .drawer{width:100%} }
+
+/* footer */
+.foot{grid-column:1/-1;border-top:1px solid var(--rule);padding:14px 26px;display:flex;align-items:center;gap:30px;flex-wrap:wrap}
+.facts{display:flex;gap:28px;flex-wrap:wrap;flex:1;min-width:0}
+.f dt{font-family:var(--f-mono);font-size:8.5px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase;margin-bottom:4px}
+.f dd{margin:0;font-family:var(--f-mono);font-size:17px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.f dd small{font-size:10.5px;color:var(--dim);font-weight:400;margin-left:5px;letter-spacing:0}
+.f.hero dd{font-family:var(--f-display);font-size:29px;font-weight:400;letter-spacing:-.01em}
+.alerts{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);line-height:1.75;text-align:right}
+.alerts b{color:var(--dim);font-weight:400}
+.alerts i{font-style:normal;color:var(--sig-rise)}
+
+@media (max-width:1020px){
+  .app{grid-template-columns:minmax(0,1fr);height:auto;min-height:0}
+  .head{gap:6px}
+  .stage{grid-row:2;height:56dvh;min-height:330px;border-right:0;border-bottom:1px solid var(--rule)}
+  .rail{grid-row:3;overflow:visible}
+  .foot{grid-row:4}
+  .alerts{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important}}
+</style>
+
+<div class="app">
+  <header class="head">
+    <h1 id="h1"></h1>
+    <div class="stamp"><span id="s-origin"></span> &middot; tracking since <span id="s-since"></span>
+      &middot; last run <span id="s-last"></span> 07:00 SGT &middot; USD per person</div>
+  </header>
+
+  <div class="stage">
+    <canvas id="gl"></canvas>
+    <div class="labels" id="labels"></div>
+    <div class="tools">
+      <button class="tg" id="t-all" aria-pressed="false">Show all routings</button>
+    </div>
+    <div class="spin">Drag to spin &middot; scroll to zoom</div>
+    <aside class="drawer" id="drawer" aria-hidden="true">
+      <div class="dh">
+        <div class="dh-top">
+          <div>
+            <div class="city" id="d-city"></div>
+            <div class="meta" id="d-meta"></div>
+          </div>
+          <button class="dx" id="d-close">Close</button>
+        </div>
+        <div class="tabs" id="d-tabs"></div>
+      </div>
+      <div class="dbody" id="d-body"></div>
+    </aside>
+    <div class="boot" id="boot">Plotting great circles</div>
+  </div>
+
+  <div class="rail" id="rail"></div>
+
+  <footer class="foot">
+    <dl class="facts">
+      <div class="f hero"><dt>Nonstop</dt><dd id="f-direct"></dd></div>
+      <div class="f"><dt>Destinations</dt><dd id="f-dest"></dd></div>
+      <div class="f"><dt>Cheapest round trip</dt><dd id="f-cheap"></dd></div>
+      <div class="f"><dt>Routings priced</dt><dd id="f-routes"></dd></div>
+      <div class="f"><dt>Hub airports</dt><dd id="f-hubs"></dd></div>
+      <div class="f"><dt>Fare observations</dt><dd id="f-obs"></dd></div>
+    </dl>
+    <div class="alerts" id="alertbox"></div>
+  </footer>
+</div>
+
+<script type="module">
+import * as THREE from './three.module.min.js';
+const [FARES, OPTIONS] = await Promise.all([
+  fetch('./sample/fares.json', {cache:'no-cache'}).then(r => r.json()),
+  fetch('./sample/options.json', {cache:'no-cache'}).then(r => r.json())
+]);
+(function(){
+"use strict";
+
+var AP = FARES.airports, TAU = Math.PI*2;
+/* Where every trip starts. Comes from the data, so the viewer is not
+   tied to one airport. */
+var ORIGIN = FARES.origin || 'DPS';
+var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Trips, colours and headline all arrive with the data. */
+var TRIPS = (FARES.trips || []).map(function(t){
+  return {
+    id: t.id, key: t.key || t.id.toLowerCase(), city: t.city || t.id,
+    kind: t.kind || 'watch', why: t.why || '', when: t.when || '',
+    cabins: t.cabins || ['economy'], target: t.target,
+    css: t.css || '#8B8A9C',
+    hex: parseInt((t.css || '#8B8A9C').slice(1), 16)
+  };
+});
+
+/* ── geometry on a sphere ─────────────────────────────────── */
+
+function vec(lat, lon, r){
+  var phi = (90-lat)*Math.PI/180, th = (lon+180)*Math.PI/180;
+  return new THREE.Vector3(
+    -r*Math.sin(phi)*Math.cos(th), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(th)
+  );
+}
+function apVec(code, r){ var a = AP[code]; return vec(a.lat, a.lon, r||1); }
+
+function km(a, b){
+  var A = AP[a], B = AP[b], R = 6371, d = Math.PI/180;
+  var dLat = (B.lat-A.lat)*d, dLon = (B.lon-A.lon)*d;
+  var s = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(A.lat*d)*Math.cos(B.lat*d)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(s)));
+}
+function pathKm(codes){
+  var t = 0;
+  for(var i=0;i<codes.length-1;i++) t += km(codes[i], codes[i+1]);
+  return t;
+}
+
+/* great circle, lifted by an amount proportional to how far it goes */
+function arcPoints(a, b, segs){
+  var va = apVec(a,1), vb = apVec(b,1);
+  var ang = va.angleTo(vb);
+  var lift = 0.045 + ang*0.135;
+  var pts = [], i, t, p, sinA = Math.sin(ang);
+  for(i=0;i<=segs;i++){
+    t = i/segs;
+    if(sinA < 1e-6){ p = va.clone(); }
+    else {
+      p = va.clone().multiplyScalar(Math.sin((1-t)*ang)/sinA)
+            .add(vb.clone().multiplyScalar(Math.sin(t*ang)/sinA));
+    }
+    p.normalize().multiplyScalar(1 + lift*Math.sin(Math.PI*t) + 0.006);
+    pts.push(p);
+  }
+  return pts;
+}
+function routePoints(codes){
+  var all = [];
+  for(var i=0;i<codes.length-1;i++){
+    var seg = arcPoints(codes[i], codes[i+1], 40);
+    all = all.concat(i ? seg.slice(1) : seg);
+  }
+  return all;
+}
+function legCodes(r){
+  var dest = r.trip;
+  return r.leg === 'out' ? [ORIGIN].concat(r.via, [dest])
+                         : [dest].concat(r.via, [ORIGIN]);
+}
+
+/* ── scene ────────────────────────────────────────────────── */
+
+var canvas = document.getElementById('gl'), stageEl = canvas.parentElement;
+var renderer, scene, camera, globe, arcGroup, nodeGroup, pulseGroup, stopGroup, headGroup;
+var showAll = false, focus = (FARES.trips && FARES.trips[0] ? FARES.trips[0].id : null);
+var spinning = !reduced, dragging = false, lastX = 0, lastY = 0;
+var yaw = 0, pitch = 0.30, zoom = 1, selHubs = [];
+var drawerTarget = 0, drawerNow = 0, drawerPx = 0;   /* globe reframing while the drawer is open */
+
+function init(){
+  renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  /* Every material here is unlit (Basic/Line/custom), so there is no
+     linear workflow to honour. sRGB output only lifts the authored
+     darks: the near-black globe came out pale slate. */
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x07090F);
+  camera = new THREE.PerspectiveCamera(31, 1, 0.1, 40);
+
+  globe = new THREE.Group(); scene.add(globe);
+
+  /* the body of the earth: opaque, so arcs on the far side are
+     genuinely hidden and the thing reads as a sphere */
+  globe.add(new THREE.Mesh(
+    new THREE.SphereGeometry(0.994, 64, 48),
+    new THREE.MeshBasicMaterial({color:0x0A0E16})
+  ));
+
+  /* graticule every 15 degrees, equator and prime meridian lifted */
+  var thin = new THREE.LineBasicMaterial({color:0x1E2A3D, transparent:true, opacity:0.85});
+  var bold = new THREE.LineBasicMaterial({color:0x33455F, transparent:true, opacity:0.95});
+  var lat, lon, pts, i;
+  for(lat=-75; lat<=75; lat+=15){
+    pts = [];
+    for(i=0;i<=180;i++) pts.push(vec(lat, -180 + i*2, 1));
+    globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+      (lat===0) ? bold : thin));
+  }
+  for(lon=-180; lon<180; lon+=15){
+    pts = [];
+    for(i=0;i<=90;i++) pts.push(vec(-90 + i*2, lon, 1));
+    globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+      (lon===0) ? bold : thin));
+  }
+
+  /* atmosphere: a back-facing shell with a fresnel falloff */
+  globe.add(new THREE.Mesh(
+    new THREE.SphereGeometry(1.16, 48, 36),
+    new THREE.ShaderMaterial({
+      transparent:true, side:THREE.BackSide, depthWrite:false, blending:THREE.AdditiveBlending,
+      uniforms:{},
+      vertexShader:[
+        'varying vec3 vN; varying vec3 vP;',
+        'void main(){ vN = normalize(normalMatrix*normal);',
+        ' vec4 mv = modelViewMatrix*vec4(position,1.0); vP = mv.xyz;',
+        ' gl_Position = projectionMatrix*mv; }'
+      ].join('\n'),
+      fragmentShader:[
+        'varying vec3 vN; varying vec3 vP;',
+        'void main(){',
+        ' float f = pow(1.0 - abs(dot(normalize(vN), normalize(-vP))), 3.2);',
+        ' gl_FragColor = vec4(vec3(0.24,0.42,0.66) * f, f*0.85); }'
+      ].join('\n')
+    })
+  ));
+
+  arcGroup = new THREE.Group();   globe.add(arcGroup);
+  nodeGroup = new THREE.Group();  globe.add(nodeGroup);
+  pulseGroup = new THREE.Group(); globe.add(pulseGroup);
+  stopGroup = new THREE.Group();  globe.add(stopGroup);
+  headGroup = new THREE.Group();  globe.add(headGroup);
+
+  buildNodes();
+  buildArcs();
+}
+
+var nodeMat = {};
+function buildNodes(){
+  var geo = new THREE.SphereGeometry(0.011, 12, 10);
+  var big = new THREE.SphereGeometry(0.018, 14, 12);
+  Object.keys(AP).forEach(function(code){
+    var t = null, i;
+    for(i=0;i<TRIPS.length;i++) if(TRIPS[i].id === code) t = TRIPS[i];
+    var isEnd = t || code === ORIGIN;
+    var col = code === ORIGIN ? 0xFFFFFF : (t ? t.hex : 0x44536B);
+    var m = new THREE.Mesh(isEnd ? big : geo,
+      new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:isEnd?1:0.75}));
+    m.position.copy(apVec(code, 1.004));
+    m.userData.code = code;
+    m.userData.hub = !isEnd;
+    nodeGroup.add(m);
+  });
+}
+
+/* Every priced routing becomes a tube. Default view shows only the
+   cheapest out and back per trip; the toggle reveals all 45. */
+var arcs = [];
+function buildArcs(){
+  var cheapest = {};
+  FARES.routes.forEach(function(r){
+    var k = r.trip + '|' + r.leg;
+    if(!cheapest[k] || r.price < cheapest[k].price) cheapest[k] = r;
+  });
+
+  FARES.routes.forEach(function(r){
+    var trip = null, i;
+    for(i=0;i<TRIPS.length;i++) if(TRIPS[i].id === r.trip) trip = TRIPS[i];
+    if(!trip) return;
+    var codes = legCodes(r);
+    /* a hub we have no coordinate for should drop its routing, not
+       take the whole page down */
+    for(var j=0;j<codes.length;j++) if(!AP[codes[j]]) return;
+    var curve = new THREE.CatmullRomCurve3(routePoints(codes));
+    var mesh = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 100, 0.0018, 5, false),
+      new THREE.MeshBasicMaterial({color:trip.hex, transparent:true,
+        opacity:0.30, depthWrite:false})
+    );
+    arcGroup.add(mesh);
+    arcs.push({mesh:mesh, trip:r.trip, curve:curve, r:r, codes:codes});
+  });
+
+  applyView();
+}
+function tripOf(id){ for(var i=0;i<TRIPS.length;i++) if(TRIPS[i].id===id) return TRIPS[i]; return TRIPS[0]; }
+
+/* The bold lines are the itineraries the cards actually describe, in
+   whichever mode the rail is set to. They are rebuilt rather than
+   flagged on the historical network, because that network holds the
+   cheapest fare ever seen per hub, across every cabin and every run,
+   which is a different and sometimes unbookable trip. */
+var headArcs = [];
+function buildHeadArcs(){
+  headArcs.forEach(function(a){
+    headGroup.remove(a.mesh); a.mesh.geometry.dispose(); a.mesh.material.dispose();
+    if(a.pulse){ pulseGroup.remove(a.pulse); a.pulse.geometry.dispose(); a.pulse.material.dispose(); }
+  });
+  headArcs = [];
+  TRIPS.forEach(function(t){
+    var sel = pickTrip(t.id, railMode);
+    if(!sel) return;
+    [sel.out, sel.ret].forEach(function(o){
+      var codes = optCodes(t.id, o), i;
+      for(i=0;i<codes.length;i++) if(!AP[codes[i]]) return;
+      var curve = new THREE.CatmullRomCurve3(routePoints(codes));
+      var mesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 130, 0.0042, 5, false),
+        new THREE.MeshBasicMaterial({color:t.hex, transparent:true, opacity:0.95, depthWrite:false})
+      );
+      headGroup.add(mesh);
+      var pulse = new THREE.Mesh(new THREE.SphereGeometry(0.0135, 10, 8),
+        new THREE.MeshBasicMaterial({color:t.hex, transparent:true}));
+      pulseGroup.add(pulse);
+      headArcs.push({mesh:mesh, trip:t.id, curve:curve, pulse:pulse, t:Math.random(), codes:codes});
+    });
+  });
+  applyView();
+}
+
+var liveHubs = {};
+function applyView(){
+  var muted = !!hiMesh;
+  liveHubs = {};
+  arcs.forEach(function(a){
+    a.mesh.visible = showAll;
+    a.mesh.material.opacity = muted ? 0.05 : 0.26;
+    if(showAll && a.codes) a.codes.forEach(function(code){ liveHubs[code] = 1; });
+  });
+  headArcs.forEach(function(a){
+    var on = (a.trip === focus);
+    a.mesh.visible = true;
+    a.mesh.material.opacity = muted ? 0.10 : (on ? 0.97 : 0.34);
+    a.pulse.visible = !muted && on;
+    a.codes.forEach(function(code){ liveHubs[code] = 1; });
+  });
+  refreshVisibility();
+}
+
+/* hubs appear when you ask for them, when you zoom in far enough to
+   tell them apart, or when they are a stop on the chosen itinerary */
+function refreshVisibility(){
+  /* A hub only earns a dot when a line actually runs through it.
+     Zooming in used to reveal every airport in the data, including
+     ones whose routing was not drawn, which left dots meaning nothing. */
+  var showHubs = showAll || zoom < 0.74 || !!hiMesh;
+  function keep(code){
+    if(selHubs.indexOf(code) >= 0) return true;
+    return showHubs && !!liveHubs[code];
+  }
+  nodeGroup.children.forEach(function(n){
+    n.visible = !n.userData.hub || keep(n.userData.code);
+  });
+  Object.keys(labelEls).forEach(function(code){
+    var el = labelEls[code];
+    var on = el.dataset.hub !== '1' || keep(code);
+    el.style.display = on ? 'block' : 'none';
+    el.classList.toggle('stop', selHubs.indexOf(code) >= 0);
+  });
+}
+
+/* ── labels, projected to crisp HTML ──────────────────────── */
+
+var labelEls = {}, labelsEl = document.getElementById('labels');
+function buildLabels(){
+  Object.keys(AP).forEach(function(code){
+    var a = AP[code], t = null, i;
+    for(i=0;i<TRIPS.length;i++) if(TRIPS[i].id === code) t = TRIPS[i];
+    var isEnd = t || code === ORIGIN;
+    var el = document.createElement('div');
+    el.className = 'lb' + (isEnd ? '' : ' hub');
+    el.dataset.hub = isEnd ? '0' : '1';
+    el.style.color = code === ORIGIN ? '#FFFFFF' : (t ? t.css : '');
+    el.innerHTML = isEnd
+      ? '<span>' + code + '<em>' + a.city + '</em></span>'
+      : '<span>' + code + '</span>';
+    if(!isEnd) el.style.display = 'none';
+    labelsEl.appendChild(el);
+    labelEls[code] = el;
+  });
+}
+var _v = new THREE.Vector3();
+function placeLabels(){
+  var w = stageEl.clientWidth, h = stageEl.clientHeight;
+  Object.keys(labelEls).forEach(function(code){
+    var el = labelEls[code];
+    if(el.style.display === 'none') return;
+    _v.copy(apVec(code, 1.02)).applyMatrix4(globe.matrixWorld);
+    var toCam = camera.position.clone().sub(_v);
+    var facing = _v.clone().normalize().dot(toCam.normalize());
+    _v.project(camera);
+    var x = (_v.x*0.5+0.5)*w, y = (-_v.y*0.5+0.5)*h;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.opacity = facing > 0.03 ? (el.dataset.hub === '1' ? 0.85 : 1) : 0;
+  });
+}
+
+/* ── the rail ─────────────────────────────────────────────── */
+
+function legLine(o){
+  var via = o.v.length ? 'via ' + o.v.join(', ') : 'nonstop';
+  /* The date leads: where a trip has flexible dates the cheapest leg is
+     often not the one you first thought of. */
+  return '<b>' + niceDate(o.d) + '</b> \u00B7 ' + money(o.p) + ' ' + o.al +
+         ' \u00B7 ' + via + ' \u00B7 ' + hhmm(o.m) +
+         ' \u00B7 ' + clockOf(o.dp) + '\u2192' + clockOf(o.ar) + dayShift(o.dp, o.ar);
+}
+function money(n){ return '$' + Math.round(n).toLocaleString('en-US'); }
+function seriesFor(id, cabin){
+  return FARES.series.filter(function(s){ return s.trip===id && s.cabin===cabin && s.total; });
+}
+function sparkline(pts, col){
+  if(pts.length < 2) return '';
+  var W = 300, H = 34, P = 3;
+  var vals = pts.map(function(p){ return p.total; });
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  if(hi - lo < 1){ lo -= 1; hi += 1; }
+  var d = '', a = '', i, x, y;
+  for(i=0;i<pts.length;i++){
+    x = P + (W-2*P) * (i/(pts.length-1));
+    y = H-P - (H-2*P) * ((vals[i]-lo)/(hi-lo));
+    d += (i?' L':'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    a += (i?' L':'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }
+  a += ' L' + (W-P) + ' ' + (H-P) + ' L' + P + ' ' + (H-P) + ' Z';
+  var lx = P + (W-2*P), ly = H-P - (H-2*P)*((vals[vals.length-1]-lo)/(hi-lo));
+  return '<svg class="spk" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+    '<path d="' + a + '" fill="' + col + '" opacity="0.10"></path>' +
+    '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="1.6" ' +
+      'vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>' +
+    '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="2.6" fill="' + col + '"></circle></svg>';
+}
+
+function buildRail(){
+  var rail = document.getElementById('rail');
+  rail.innerHTML = '';
+
+  var bar = document.createElement('div');
+  bar.className = 'railbar';
+  bar.innerHTML = '<span>rank every trip by</span>';
+  var seg = document.createElement('div');
+  seg.className = 'seg2';
+  [['cheap','cheapest'],['fast','fastest']].forEach(function(k){
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = k[1];
+    b.setAttribute('aria-pressed', railMode === k[0] ? 'true' : 'false');
+    b.addEventListener('click', function(){ railMode = k[0]; buildRail(); buildHeadArcs(); });
+    seg.appendChild(b);
+  });
+  bar.appendChild(seg);
+  rail.appendChild(bar);
+
+  var groups = [
+    ['Fixed dates \u00B7 priced every morning', 'tracked'],
+    ['No dates \u00B7 watching for a fare to jump on', 'watch']
+  ];
+  groups.forEach(function(g){
+    var h = document.createElement('div');
+    h.className = 'grp';
+    h.innerHTML = g[0];
+    rail.appendChild(h);
+    TRIPS.filter(function(t){ return t.kind === g[1]; }).forEach(function(t){
+      rail.appendChild(buildCard(t, rail));
+    });
+  });
+}
+
+function buildCard(t, rail){
+  var b = document.createElement('button');
+  b.className = 'card ' + t.key;
+  b.type = 'button';
+  b.style.setProperty('--c', t.css);
+  b.setAttribute('aria-pressed', t.id === focus ? 'true' : 'false');
+
+  var direct = km(ORIGIN, t.id);
+  var w = FARES.watch[t.id];
+  var sub = t.when
+    ? t.when + (t.why ? ' \u00B7 ' + t.why : '')
+    : t.why + ' \u00B7 no dates set';
+  var head = '<div class="ct"><div class="city">' + t.city + '</div>' +
+             '<div class="iata">' + t.id + '</div></div>' +
+             '<div class="when">' + sub + ' \u00B7 ' +
+             Math.round(direct).toLocaleString('en-US') + ' km away</div>';
+  var body = '';
+
+  var sel = pickTrip(t.id, railMode);
+  var alt = pickTrip(t.id, railMode === 'cheap' ? 'fast' : 'cheap');
+
+  if(sel){
+    body += '<div class="big"><div class="px">' + money(sel.p) + '</div>' +
+            '<div class="hrs">' + hhmm(sel.m) + ' in the air</div></div>';
+    if(alt && (alt.p !== sel.p || alt.m !== sel.m)){
+      body += railMode === 'fast'
+        ? '<div class="trade"><b>+' + money(sel.p - alt.p) + '</b> to save ' + hhmm(alt.m - sel.m) + '</div>'
+        : '<div class="trade">' + hhmm(sel.m - alt.m) + ' longer, <b>' + money(alt.p - sel.p) + ' cheaper</b></div>';
+    }
+  }
+
+  if(t.kind === 'tracked'){
+    var eco = seriesFor(t.id, 'economy');
+    if(eco.length){
+      var pct = ((eco[eco.length-1].total - eco[0].total)/eco[0].total*100);
+      body += sparkline(eco, t.css);
+      body += '<div class="trade">cheapest tracked ' + (pct>0?'+':'') + pct.toFixed(1) +
+              '% in ' + eco.length + ' days</div>';
+    }
+    if(sel){
+      body += '<div class="leg"><b>Out</b> ' + legLine(sel.out) + '</div>' +
+              '<div class="leg"><b>Back</b> ' + legLine(sel.ret) + '</div>';
+    }
+    body += '<dl class="cab">';
+    t.cabins.forEach(function(c){
+      var m = FARES.latest[t.id + '|' + c];
+      var lab = c === 'premium-economy' ? 'Prem eco' : (c === 'business' ? 'Business' : 'Economy');
+      body += '<div><dt>' + lab + '</dt>' +
+        (m && m.total ? '<dd>' + money(m.total) + '</dd>'
+                      : '<dd class="none">none at \u22641 stop</dd>') + '</div>';
+    });
+    body += '</dl>';
+  }
+  else if(w){
+    var under = w.total <= t.target;
+    if(sel){
+      body += '<div class="leg"><b>Out</b> ' + legLine(sel.out) + '</div>' +
+              '<div class="leg"><b>Back</b> ' + legLine(sel.ret) + '</div>';
+    }
+    body += '<dl class="cab">' +
+      '<div><dt>Best ever seen</dt><dd>' + money(w.total) +
+        (w.nonstop ? ' <span class="ns">nonstop</span>' : '') + '</dd></div>' +
+      '<div><dt>Jump on under</dt><dd>' + money(t.target) + '</dd></div>' +
+      '</dl>';
+    body += '<div class="trade"><span class="state ' + (under ? 'buy' : 'wait') + '">' +
+      (under ? 'under your price' : money(w.total - t.target) + ' above your price') +
+      '</span></div>';
+  }
+
+  b.innerHTML = head + body;
+  b.addEventListener('click', function(){
+    focus = t.id;
+    Array.prototype.forEach.call(rail.querySelectorAll('.card'), function(c){
+      c.setAttribute('aria-pressed','false');
+    });
+    b.setAttribute('aria-pressed','true');
+    spinning = false;
+    flyTo(t.id);
+    applyView();
+    openDetail(t.id);
+  });
+  return b;
+}
+
+/* ── ranking a whole round trip ─────────────────────────────
+   Only legs from the same bookable date pair are combined: the
+   watchlist samples several candidate pairs, so the cheapest
+   outbound and the cheapest return can belong to different trips. */
+
+var railMode = 'cheap';
+
+function minBy(list, k){
+  return list.reduce(function(a,b){ return b[k] < a[k] ? b : a; });
+}
+function pickTrip(dest, mode){
+  var lim = FARES.maxStops[dest];
+  if(lim === undefined) lim = 2;
+  var rows = (OPTIONS[dest] || []).filter(function(o){
+    return o.cb === 'e' && o.st <= lim;
+  });
+  var best = null;
+  (FARES.pairs[dest] || []).forEach(function(pr){
+    var O = rows.filter(function(o){ return o.lg === 'out' && o.d === pr[0]; });
+    var R = rows.filter(function(o){ return o.lg === 'ret' && o.d === pr[1]; });
+    if(!O.length || !R.length) return;
+    var key = mode === 'fast' ? 'm' : 'p';
+    var o1 = minBy(O, key), r1 = minBy(R, key);
+    var cand = {p:o1.p + r1.p, m:o1.m + r1.m, out:o1, ret:r1, dates:pr};
+    if(!best || cand[key] < best[key]) best = cand;
+  });
+  return best;
+}
+
+/* ── detail drawer: every itinerary priced for a destination ── */
+
+var CABIN = {e:'Economy', p:'Premium economy', b:'Business'};
+var detail = {dest:null, cab:'e', mode:'cheap', sel:null};
+var drawerEl = document.getElementById('drawer');
+
+function hhmm(m){ return Math.floor(m/60) + 'h' + ('0' + (m%60)).slice(-2); }
+function clockOf(x){ return (x || ' ').split(' ')[1] || ''; }
+function dayShift(dp, ar){
+  /* the two tables timestamp differently: fixed-date rows carry
+     YYYY-MM-DD, watchlist rows only MM-DD, so read from the end */
+  function md(x){
+    var p = (x || '').split(' ')[0].split('-');
+    return p.length < 2 ? null : [+p[p.length-2], +p[p.length-1]];
+  }
+  var a = md(dp), b = md(ar);
+  if(!a || !b) return '';
+  var n = Math.round((new Date(2027, b[0]-1, b[1]) - new Date(2027, a[0]-1, a[1]))/86400000);
+  if(n < -300) n += 365;                 /* trip crosses new year */
+  return n > 0 ? '+' + n : '';
+}
+function niceDate(d){
+  var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var p = d.split('-');
+  return parseInt(p[2],10) + ' ' + M[parseInt(p[1],10)-1] + ' ' + p[0];
+}
+
+function openDetail(id){
+  var opts = OPTIONS[id] || [];
+  var cabs = [];
+  ['e','p','b'].forEach(function(c){ if(opts.some(function(o){return o.cb===c;})) cabs.push(c); });
+  detail.dest = id;
+  detail.cab = cabs.indexOf(detail.cab) >= 0 ? detail.cab : (cabs[0] || 'e');
+  detail.sel = null;
+  highlight(null);
+
+  var t = tripOf(id);
+  document.getElementById('d-city').textContent = t.city;
+  document.getElementById('d-meta').textContent =
+    id + ' \u00B7 ' + Math.round(km(ORIGIN, id)).toLocaleString('en-US') + ' km from ' + ((AP[ORIGIN] && AP[ORIGIN].city) || ORIGIN) + ' \u00B7 ' +
+    opts.length + ' itineraries priced';
+
+  var tabs = document.getElementById('d-tabs');
+  tabs.innerHTML = '';
+  cabs.forEach(function(c){
+    var b = document.createElement('button');
+    b.className = 'tab'; b.type = 'button';
+    b.textContent = CABIN[c];
+    b.setAttribute('aria-pressed', c === detail.cab ? 'true' : 'false');
+    b.style.color = c === detail.cab ? t.css : '';
+    b.addEventListener('click', function(){ detail.cab = c; openDetail(id); });
+    tabs.appendChild(b);
+  });
+  var srt = document.createElement('div');
+  srt.className = 'dsort';
+  srt.innerHTML = '<span>rank</span>';
+  [['best','best'],['cheap','cheapest'],['fast','fastest']].forEach(function(k){
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = k[1];
+    b.setAttribute('aria-pressed', detail.mode === k[0] ? 'true' : 'false');
+    b.addEventListener('click', function(){ detail.mode = k[0]; openDetail(id); });
+    srt.appendChild(b);
+  });
+  tabs.appendChild(srt);
+
+  renderOptions(id, opts);
+  drawerEl.classList.add('on');
+  drawerEl.setAttribute('aria-hidden','false');
+  drawerPx = drawerEl.offsetWidth;
+  drawerTarget = 1;
+}
+
+function renderOptions(id, opts){
+  var body = document.getElementById('d-body');
+  body.innerHTML = '';
+  var rows = opts.filter(function(o){ return o.cb === detail.cab; });
+  if(!rows.length){
+    body.innerHTML = '<div class="dempty">Nothing priced in this cabin at this stop limit. ' +
+      'That is usually the answer rather than a gap: some routes have no such itinerary.</div>';
+    return;
+  }
+  [['out','Outbound'],['ret','Back']].forEach(function(L){
+    var list = rows.filter(function(o){ return o.lg === L[0]; });
+    if(!list.length) return;
+    /* "best" trades money against hours the way a person does: an
+       itinerary is scored on where it sits between the cheapest and
+       dearest, and the quickest and slowest, in this leg. */
+    var ps = list.map(function(o){ return o.p; }), ms = list.map(function(o){ return o.m; });
+    var pLo = Math.min.apply(null, ps), pHi = Math.max.apply(null, ps);
+    var mLo = Math.min.apply(null, ms), mHi = Math.max.apply(null, ms);
+    list.forEach(function(o){
+      var np = pHi > pLo ? (o.p - pLo)/(pHi - pLo) : 0;
+      var nm = mHi > mLo ? (o.m - mLo)/(mHi - mLo) : 0;
+      o._s = 0.62*np + 0.38*nm;
+    });
+    var pickCheap = list.reduce(function(a,b){ return b.p < a.p ? b : a; });
+    var pickFast  = list.reduce(function(a,b){ return b.m < a.m ? b : a; });
+    var pickBest  = list.reduce(function(a,b){ return b._s < a._s ? b : a; });
+    list.sort(function(a,b){
+      if(detail.mode === 'cheap') return a.p - b.p;
+      if(detail.mode === 'fast')  return a.m - b.m;
+      return a._s - b._s;
+    });
+    var h = document.createElement('div');
+    h.className = 'dleg';
+    h.innerHTML = L[1] + ' <b>' + niceDate(list[0].d) + ' \u00B7 ' + list.length + ' options</b>';
+    body.appendChild(h);
+    list.forEach(function(o){
+      var b = document.createElement('button');
+      b.className = 'opt' + (o === pickCheap ? ' cheap' : '');
+      b.type = 'button';
+      b.setAttribute('aria-pressed','false');
+      var via = o.v.length ? 'via ' + o.v.join(', ') : '<i class="ns2">nonstop</i>';
+      var pills = '';
+      if(list.length >= 3){
+        if(o === pickBest)  pills += '<span class="tag best">best</span>';
+        if(o === pickCheap) pills += '<span class="tag cheapest">cheapest</span>';
+        if(o === pickFast)  pills += '<span class="tag fast">fastest</span>';
+      }
+      b.innerHTML =
+        '<div class="p">' + money(o.p) + '</div>' +
+        '<div class="w"><div class="a">' + o.al + pills + '</div>' +
+        '<div class="d">' + via + ' \u00B7 ' + hhmm(o.m) +
+        (o.ly ? ' \u00B7 <i>' + hhmm(o.ly) + ' on the ground</i>' : '') + '</div>' +
+        '<div class="t">' + clockOf(o.dp) + ' \u2192 ' + clockOf(o.ar) +
+          '<sup>' + dayShift(o.dp, o.ar) + '</sup></div></div>';
+      b.addEventListener('click', function(){
+        var was = (detail.sel === o);
+        Array.prototype.forEach.call(body.querySelectorAll('.opt'), function(x){
+          x.setAttribute('aria-pressed','false');
+        });
+        detail.sel = was ? null : o;
+        b.setAttribute('aria-pressed', was ? 'false' : 'true');
+        highlight(was ? null : o);
+      });
+      body.appendChild(b);
+    });
+  });
+  body.scrollTop = 0;
+}
+
+function closeDetail(){
+  drawerEl.classList.remove('on');
+  drawerEl.setAttribute('aria-hidden','true');
+  drawerTarget = 0;
+  detail.dest = null; detail.sel = null;
+  highlight(null);
+}
+document.getElementById('d-close').addEventListener('click', closeDetail);
+window.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeDetail(); });
+
+/* draw one chosen itinerary on the globe and mute the rest */
+var hiMesh = null;
+function optCodes(dest, o){
+  return o.lg === 'out' ? [ORIGIN].concat(o.v, [dest]) : [dest].concat(o.v, [ORIGIN]);
+}
+function highlight(o){
+  if(hiMesh){ globe.remove(hiMesh); hiMesh.geometry.dispose(); hiMesh.material.dispose(); hiMesh = null; }
+  if(o && detail.dest){
+    var codes = optCodes(detail.dest, o), i;
+    for(i=0;i<codes.length;i++) if(!AP[codes[i]]) { applyView(); return; }
+    var curve = new THREE.CatmullRomCurve3(routePoints(codes));
+    hiMesh = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 150, 0.0068, 6, false),
+      new THREE.MeshBasicMaterial({color:0xFFFFFF, transparent:true, opacity:0.96, depthWrite:false})
+    );
+    globe.add(hiMesh);
+    selHubs = o.v.slice();
+    optCodes(detail.dest, o).forEach(function(c){ liveHubs[c] = 1; });
+    setStops(o.v, o);
+  } else {
+    selHubs = [];
+    setStops([], null);
+  }
+  applyView();
+}
+
+/* a ring laid flat on the surface at each stopover, with the layover
+   time written into that airport's label */
+function setStops(codes, o){
+  while(stopGroup.children.length){
+    var m = stopGroup.children[0];
+    stopGroup.remove(m); m.geometry.dispose(); m.material.dispose();
+  }
+  Object.keys(labelEls).forEach(function(c){
+    var em = labelEls[c].querySelector('em');
+    if(em && labelEls[c].dataset.hub === '1') em.textContent = '';
+  });
+  codes.forEach(function(c, i){
+    if(!AP[c]) return;
+    var ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.034, 0.0055, 8, 30),
+      new THREE.MeshBasicMaterial({color:0xFFFFFF, transparent:true, opacity:0.92, depthWrite:false})
+    );
+    var pos = apVec(c, 1.006);
+    ring.position.copy(pos);
+    ring.lookAt(pos.clone().multiplyScalar(2));
+    stopGroup.add(ring);
+
+    var el = labelEls[c];
+    if(el){
+      var em = el.querySelector('em');
+      if(!em){ em = document.createElement('em'); el.querySelector('span').appendChild(em); }
+      em.textContent = AP[c].city + (o && o.ly && codes.length === 1 ? ' \u00B7 ' + hhmm(o.ly) : '');
+    }
+  });
+}
+
+
+/* swing the globe so a destination and the origin are both in shot */
+var target = {yaw:0, pitch:0.30}, easing = false;
+function flyTo(code){
+  var a = AP[code], d = AP[ORIGIN];
+  var midLon = midpointLon(d.lon, a.lon);
+  var midLat = (d.lat + a.lat)/2;
+  /* a Y rotation ADDS to a point's atan2(x,z) angle, so bringing
+     longitude L to face the camera needs -(L+90) */
+  target.yaw = -(midLon + 90) * Math.PI/180;
+  target.pitch = Math.max(-0.55, Math.min(0.95, midLat*Math.PI/180*0.85 + 0.10));
+  easing = true;
+}
+function midpointLon(a, b){
+  var d = ((b - a + 540) % 360) - 180;
+  return a + d/2;
+}
+
+/* ── facts ────────────────────────────────────────────────── */
+
+function fillFacts(){
+  var pg = FARES.page || {};
+  document.title = pg.title || 'Fare tracker';
+  document.getElementById('h1').innerHTML =
+    (pg.headline || 'Every way out of here.') +
+    (pg.headline_em ? ' <i>' + pg.headline_em + '</i>' : '');
+  document.getElementById('s-origin').textContent = pg.origin_label || 'Origin';
+  document.getElementById('s-since').textContent = FARES.runs[0];
+  document.getElementById('s-last').textContent = FARES.runs[FARES.runs.length-1];
+
+  var nonstopDests = {}, cheapest = null;
+  FARES.routes.forEach(function(r){ if(r.stops === 0) nonstopDests[r.trip] = 1; });
+  Object.keys(FARES.watch).forEach(function(d){
+    var w = FARES.watch[d];
+    if(!cheapest || w.total < cheapest.total) cheapest = {total:w.total, dest:d};
+  });
+
+  document.getElementById('f-direct').innerHTML =
+    Object.keys(nonstopDests).length + ' <small>of ' + TRIPS.length + '</small>';
+  document.getElementById('f-cheap').innerHTML =
+    money(cheapest.total) + '<small>' + cityOf(cheapest.dest) + '</small>';
+  document.getElementById('f-routes').textContent = FARES.routes.length;
+  document.getElementById('f-hubs').textContent = FARES.hubs.length;
+  document.getElementById('f-obs').textContent = FARES.nobs.toLocaleString('en-US');
+
+  document.getElementById('f-dest').textContent = TRIPS.length;
+
+  var ab = document.getElementById('alertbox');
+  ab.innerHTML = FARES.alerts.slice(-3).map(function(a){
+    return '<div><b>' + a.ts + '</b> ' + cityOf(a.who) + ' <i>' + a.what + '</i></div>';
+  }).join('') || '<div>no alerts yet</div>';
+}
+function cityOf(id){ for(var i=0;i<TRIPS.length;i++) if(TRIPS[i].id===id) return TRIPS[i].city; return id; }
+
+/* ── input + loop ─────────────────────────────────────────── */
+
+canvas.addEventListener('pointerdown', function(e){
+  dragging = true; spinning = false; easing = false;
+  lastX = e.clientX; lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing';
+});
+canvas.addEventListener('pointerup', function(e){
+  dragging = false;
+  try{ canvas.releasePointerCapture(e.pointerId); }catch(err){}
+  canvas.style.cursor = 'grab';
+});
+canvas.addEventListener('pointermove', function(e){
+  if(!dragging) return;
+  yaw += (e.clientX - lastX)*0.006;
+  pitch = Math.max(-0.9, Math.min(1.1, pitch + (e.clientY - lastY)*0.005));
+  lastX = e.clientX; lastY = e.clientY;
+});
+canvas.style.cursor = 'grab';
+
+/* zoom: the Southeast Asian hubs sit within a few degrees of each other,
+   so the default framing cannot separate SIN, KUL and CGK */
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault();
+  zoom = Math.min(1.75, Math.max(0.46, zoom * (1 + e.deltaY*0.0013)));
+  spinning = false;
+  refreshVisibility();
+}, {passive:false});
+
+document.getElementById('t-all').addEventListener('click', function(){
+  showAll = !showAll;
+  this.setAttribute('aria-pressed', showAll ? 'true' : 'false');
+  this.textContent = showAll ? 'Cheapest only' : 'Show all routings';
+  applyView();
+});
+
+var fit = 1;
+function resize(){
+  var w = stageEl.clientWidth, h = stageEl.clientHeight;
+  if(!w || !h) return;
+  renderer.setSize(w, h, false);
+  if(drawerEl && drawerEl.classList.contains('on')) drawerPx = drawerEl.offsetWidth;
+  camera.aspect = w/h;
+  fit = Math.min(1.9, Math.max(1, 1.5/camera.aspect));
+  camera.updateProjectionMatrix();
+}
+
+var prev = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  var dt = Math.min(0.05, (now-prev)/1000) || 0;
+  prev = now;
+
+  if(spinning) yaw += dt*0.075;
+  if(easing){
+    yaw += (target.yaw - yaw)*Math.min(1, dt*2.6);
+    pitch += (target.pitch - pitch)*Math.min(1, dt*2.6);
+    if(Math.abs(target.yaw-yaw) < 0.002) easing = false;
+  }
+  globe.rotation.y = yaw;
+  /* Slide the globe out from behind the drawer and pull back far
+     enough that it fits the strip left between drawer and rail.
+     setViewOffset shifts the whole projection, so the HTML labels
+     follow it for free. */
+  var sw = stageEl.clientWidth, sh = stageEl.clientHeight;
+  drawerNow += (drawerTarget - drawerNow) * Math.min(1, dt*7);
+  var dw = drawerNow * drawerPx;
+  if(dw > sw*0.88) dw = 0;                       /* drawer covers the stage: nothing to frame */
+  var dist = 5.0*fit*zoom;
+  if(dw > 2){
+    camera.setViewOffset(sw, sh, -dw/2, 0, sw, sh);
+    var freeW = Math.max(160, sw - dw);
+    var need = 2.55*sh / (2*Math.tan(camera.fov*Math.PI/360) * freeW);
+    dist = Math.max(dist, need);
+  } else if(camera.view && camera.view.enabled){
+    camera.clearViewOffset();
+  }
+  camera.position.set(0, Math.sin(pitch)*dist, Math.cos(pitch)*dist);
+  camera.lookAt(0,0,0);
+
+  if(!reduced){
+    headArcs.forEach(function(a){
+      if(!a.pulse || !a.pulse.visible) return;
+      a.t = (a.t + dt*0.16) % 1;
+      a.pulse.position.copy(a.curve.getPointAt(a.t));
+      a.pulse.material.opacity = 0.35 + 0.65*Math.sin(Math.PI*a.t);
+    });
+  }
+
+  globe.updateMatrixWorld();
+  placeLabels();
+  renderer.render(scene, camera);
+}
+
+function boot(){
+  init();
+  buildLabels();
+  buildRail();
+  buildHeadArcs();
+  fillFacts();
+  resize();
+  if(focus) flyTo(focus);
+  if(window.ResizeObserver) new ResizeObserver(resize).observe(stageEl);
+  window.addEventListener('resize', resize);
+  applyView();
+  var b = document.getElementById('boot');
+  b.style.opacity = '0';
+  setTimeout(function(){ b.hidden = true; }, 450);
+  requestAnimationFrame(frame);
+}
+
+if(document.fonts && document.fonts.ready){
+  Promise.race([document.fonts.ready, new Promise(function(r){ setTimeout(r,1600); })]).then(boot);
+} else { boot(); }
+
+})();
+</script>
