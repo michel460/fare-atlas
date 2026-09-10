@@ -1178,17 +1178,18 @@ function buildManage(state){
 }
 
 function initManage(){
-  fetch('api/health').then(function(r){ return r.ok ? r.json() : null; })
+  fetch('api/health')
+    .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(h){
-      if(!h || !h.writable) return null;
-      return (h.auth === 'session' ? askHostForSession() : Promise.resolve(null));
+      if(!h || !h.writable) throw 0;          /* served statically: stop here */
+      return h.auth === 'session' ? askHostForSession() : null;
     })
     .then(function(tok){
-      if(tok === undefined) return;
       sessionToken = tok;
-      return api('destinations').then(function(st){ MANAGE = true; buildManage(st); });
+      return api('destinations');
     })
-    .catch(function(){ /* served statically, or not signed in: nothing to manage */ });
+    .then(function(st){ MANAGE = true; buildManage(st); })
+    .catch(function(){ /* no API, or not signed in: nothing to manage */ });
 }
 
 /* swing the globe so a destination and the origin are both in shot */

@@ -15,8 +15,8 @@ Security posture, because this writes to a config file and triggers pricing:
   * Binds to 127.0.0.1 by default. Nothing is reachable off the machine.
   * Binding anywhere else REQUIRES a credential and refuses to start without
     one, rather than quietly listening on a public interface with no auth.
-    Either a shared --token, compared in constant time, or FARE_JWT_SECRET to
-    accept the session of a site that has already signed the user in.
+    Either a shared --token, compared in constant time, or FARE_SUPABASE_URL
+    to accept the session of a site that has already signed the user in.
   * Every field is validated and bounded before it reaches the config: IATA
     codes must be three letters, dates must be real ISO dates, numbers are
     range-checked. Nothing is interpolated into a shell; destinations.py is
@@ -24,7 +24,8 @@ Security posture, because this writes to a config file and triggers pricing:
   * Writes go through destinations.py, which reparses the config afterwards
     and rolls back if the result would not load.
 """
-import argparse, base64, datetime, hashlib, hmac, json, os, re, sys, threading, time
+import argparse, datetime, hmac, json, os, re, sys, threading, time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -46,46 +47,63 @@ class Bad(Exception):
 
 # ------------------------------------------------------- session auth
 # Optional, and off by default. When this server sits behind a site that
-# already signs the user in with Supabase, it can accept that session
-# rather than inventing a second credential: the page passes its access
-# token, and this verifies the signature with the project's JWT secret.
-# HS256 is symmetric, so this needs no library.
+# already signs the user in with Supabase, it accepts that session rather
+# than inventing a second credential.
 #
-#   FARE_JWT_SECRET   the project's JWT secret
-#   FARE_JWT_SUBJECTS comma-separated user ids allowed to write
+# Verification asks Supabase whether the token is good, instead of checking
+# the signature locally. That costs a round trip, but it means the project's
+# JWT secret never has to exist on this machine, and it keeps working if the
+# project moves to asymmetric signing keys. For a personal deployment that is
+# the better trade: nothing here is worth stealing.
 #
-# A bearer token embedded in a public page would not be a secret. A signed
-# session belonging to a named user is.
-JWT_SECRET = os.environ.get("FARE_JWT_SECRET", "")
-JWT_SUBJECTS = [x.strip() for x in os.environ.get("FARE_JWT_SUBJECTS", "").split(",") if x.strip()]
+#   FARE_SUPABASE_URL   https://<ref>.supabase.co
+#   FARE_SUPABASE_ANON  the public anon key (Supabase wants it as `apikey`)
+#   FARE_ALLOWED_SUBS   comma-separated user ids allowed to write
+SB_URL = os.environ.get("FARE_SUPABASE_URL", "").rstrip("/")
+SB_ANON = os.environ.get("FARE_SUPABASE_ANON", "")
+ALLOWED = [x.strip() for x in os.environ.get("FARE_ALLOWED_SUBS", "").split(",") if x.strip()]
+SESSION_AUTH = bool(SB_URL and SB_ANON)
 
-
-def _b64(seg):
-    return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+_seen = {}                       # token -> (checked_at, user_id or None)
+_SEEN_TTL = 60
+_SEEN_MAX = 64                   # bounded: this is keyed by attacker-supplied input
 
 
 def verify_session(header):
-    """True if `header` carries a live, correctly signed token for an allowed
-    user. Never raises: any malformed input is simply not authorised."""
+    """The user id behind a live Supabase session, or None.
+
+    Never raises: anything malformed is simply not authorised. Results are
+    cached briefly so a burst of writes is not a burst of round trips, and the
+    cache is bounded because its keys come from whoever is calling."""
+    if not header.startswith("Bearer "):
+        return None
+    tok = header[7:].strip()
+    if not tok or len(tok) > 4096:
+        return None
+
+    now = time.time()
+    hit = _seen.get(tok)
+    if hit and now - hit[0] < _SEEN_TTL:
+        return hit[1]
+
+    uid = None
     try:
-        if not header.startswith("Bearer "):
-            return False
-        tok = header[7:].strip()
-        h, p, sig = tok.split(".")
-        head = json.loads(_b64(h))
-        if head.get("alg") != "HS256":
-            return False                      # no alg confusion, no "none"
-        want = hmac.new(JWT_SECRET.encode(), ("%s.%s" % (h, p)).encode(), hashlib.sha256).digest()
-        if not hmac.compare_digest(_b64(sig), want):
-            return False
-        body = json.loads(_b64(p))
-        if body.get("exp", 0) <= time.time():
-            return False
-        if body.get("role") != "authenticated":
-            return False                      # the anon key is signed too
-        return (not JWT_SUBJECTS) or (body.get("sub") in JWT_SUBJECTS)
+        req = urllib.request.Request(
+            SB_URL + "/auth/v1/user",
+            headers={"Authorization": "Bearer " + tok, "apikey": SB_ANON})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            if r.status == 200:
+                uid = (json.loads(r.read() or b"{}") or {}).get("id")
     except Exception:
-        return False
+        uid = None                                  # unreachable or rejected
+
+    if uid and ALLOWED and uid not in ALLOWED:
+        uid = None
+
+    if len(_seen) >= _SEEN_MAX:
+        _seen.clear()
+    _seen[tok] = (now, uid)
+    return uid
 
 
 # ---------------------------------------------------------------- validation
@@ -229,11 +247,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authed(self):
         auth = self.headers.get("Authorization", "")
-        if JWT_SECRET and verify_session(auth):
+        if SESSION_AUTH and verify_session(auth):
             return True
-        if not Handler.token:
-            return not (JWT_SECRET or Handler.remote)       # loopback, no auth needed
-        return hmac.compare_digest(auth, "Bearer " + Handler.token)
+        if Handler.token:
+            return hmac.compare_digest(auth, "Bearer " + Handler.token)
+        return not (SESSION_AUTH or Handler.remote)         # loopback, no auth needed
 
     def _json_body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -245,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/health":
             return self._send(200, dict(ok=True, writable=True,
-                                        auth="session" if JWT_SECRET else
+                                        auth="session" if SESSION_AUTH else
                                              ("token" if Handler.token else "none")))
         if path == "/api/destinations":
             if not self._authed():
@@ -309,13 +327,13 @@ def main():
     args = ap.parse_args()
 
     Handler.remote = args.host not in ("127.0.0.1", "localhost", "::1")
-    if Handler.remote and not (args.token or JWT_SECRET):
-        sys.exit("refusing to listen on %s without --token or FARE_JWT_SECRET: this API "
+    if Handler.remote and not (args.token or SESSION_AUTH):
+        sys.exit("refusing to listen on %s without --token or FARE_SUPABASE_URL: this API "
                  "writes to your config and starts pricing runs." % args.host)
     Handler.token = args.token or None
 
     print("viewer  http://%s:%d/" % (args.host, args.port))
-    print("api     %s" % ("session (Supabase JWT)" if JWT_SECRET else
+    print("api     %s" % ("session (Supabase)" if SESSION_AUTH else
                           ("shared token" if Handler.token else "loopback only, no auth")))
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
