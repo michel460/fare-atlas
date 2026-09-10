@@ -219,6 +219,13 @@ the viewer directory, so `..` goes nowhere.
 commit. They hold where you are going and what you will pay, which is nobody
 else's business.
 
+The same applies to the export. `fares.json` names your home airport and the
+dates you will be away from it, so publishing the viewer on a host anyone can
+reach means publishing your travel schedule. If the page is reachable, serve
+the data through `serve.py`'s `/api/data/*` endpoints, which require the same
+session as a write, and stop the web server handing out the files directly.
+Signed out, the page loads and shows nothing.
+
 ## Licence
 
 MIT.

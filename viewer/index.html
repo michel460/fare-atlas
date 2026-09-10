@@ -267,10 +267,15 @@ h1 i{font-style:italic;color:var(--dim)}
 
 <script type="module">
 import * as THREE from './three.module.min.js';
+
+/* The tracker writes these two files; sample/ holds an invented dataset so the
+   page runs straight from a checkout. Point at your own export to see your own
+   trips, and serve it behind serve.py if it should not be public. */
 const [FARES, OPTIONS] = await Promise.all([
   fetch('./sample/fares.json', {cache:'no-cache'}).then(r => r.json()),
   fetch('./sample/options.json', {cache:'no-cache'}).then(r => r.json())
 ]);
+
 (function(){
 "use strict";
 
@@ -1248,10 +1253,14 @@ function buildManage(state){
 }
 
 function initManage(){
+  /* When the page had to authenticate just to load its data, the session is
+     already resolved; do not go asking for it a second time. */
+  var pre = (typeof window.__FARE_SESSION !== 'undefined');
   fetch('api/health')
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(h){
       if(!h || !h.writable) throw 0;          /* served statically: stop here */
+      if(pre) return window.__FARE_SESSION;
       return h.auth === 'session' ? askHostForSession() : null;
     })
     .then(function(tok){

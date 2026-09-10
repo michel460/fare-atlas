@@ -35,6 +35,10 @@ import destinations as D                                    # noqa: E402
 from airports import choices as airport_choices            # noqa: E402
 
 VIEWER = os.path.abspath(os.path.join(DIR, "..", "viewer"))
+# Where the exported fares live. Served through the API rather than as static
+# files when auth is on, because the export is a travel schedule tied to a home
+# airport: who is away, and exactly when.
+DATA_DIR = os.path.abspath(os.environ.get("FARE_DATA_DIR", VIEWER))
 CODE_RE = re.compile(r"^[A-Z]{3}$")
 TEXT_RE = re.compile(r"^[\w \-'&.,()/]{0,60}$")
 COLOUR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -275,6 +279,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, dict(ok=True, writable=True,
                                         auth="session" if SESSION_AUTH else
                                              ("token" if Handler.token else "none")))
+        m = re.match(r"^/api/data/(fares|options)$", path)
+        if m:
+            if not self._authed():
+                return self._send(401, dict(error="unauthorised"))
+            f = os.path.join(DATA_DIR, m.group(1) + ".json")
+            if not os.path.isfile(f):
+                return self._send(404, dict(error="no export yet"))
+            with open(f, "rb") as fh:
+                return self._send(200, fh.read())
         if path == "/api/airports":
             return self._send(200, dict(airports=airport_choices()))
         if path == "/api/destinations":
@@ -336,8 +349,11 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8712)
     ap.add_argument("--token", default=os.environ.get("FARE_API_TOKEN", ""))
+    ap.add_argument("--data-dir", default=DATA_DIR,
+                    help="where the exported fares.json and options.json live")
     args = ap.parse_args()
 
+    globals()["DATA_DIR"] = os.path.abspath(args.data_dir)
     Handler.remote = args.host not in ("127.0.0.1", "localhost", "::1")
     if Handler.remote and not (args.token or SESSION_AUTH):
         sys.exit("refusing to listen on %s without --token or FARE_SUPABASE_URL: this API "
@@ -345,6 +361,7 @@ def main():
     Handler.token = args.token or None
 
     print("viewer  http://%s:%d/" % (args.host, args.port))
+    print("data    %s" % DATA_DIR)
     print("api     %s" % ("session (Supabase)" if SESSION_AUTH else
                           ("shared token" if Handler.token else "loopback only, no auth")))
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
