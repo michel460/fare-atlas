@@ -32,6 +32,24 @@ Flights, so finding a fare and going to book it are the same gesture.
 
 ## Managing what it tracks
 
+The quickest way is the browser. `serve.py` serves the viewer and a small API
+behind it, and the viewer grows a **Manage destinations** panel when it finds
+one: add, pause and remove without touching a file.
+
+```bash
+cd tracker && python3 serve.py        # http://127.0.0.1:8712
+```
+
+It binds to loopback, so nothing is reachable off the machine. Binding anywhere
+else requires `--token` and refuses to start without one, because this API
+writes to your config and starts pricing runs. Every field is validated and
+bounded before it reaches the config, and nothing is ever passed to a shell.
+
+Served as plain files instead, as a published copy would be, there is no API to
+find and the panel simply does not appear.
+
+The same operations are a CLI, which is what the server calls:
+
 ```bash
 cd tracker
 
@@ -110,12 +128,12 @@ going quiet with stale numbers.
 ## The viewer
 
 ```bash
-cd viewer && python3 -m http.server 8000
+cd tracker && python3 serve.py       # viewer plus the manage API
+cd viewer  && python3 -m http.server # viewer alone, read only
 ```
 
-Open `http://localhost:8000`. It ships with a generated sample dataset so it
-runs straight from a checkout. Point `DATA` at your own export to see your own
-trips.
+It ships with a generated sample dataset so it runs straight from a checkout.
+Point `DATA` at your own export to see your own trips.
 
 The viewer knows nothing about any particular journey. Destinations, colours,
 the origin airport and the headline all arrive in `fares.json`, which
@@ -134,6 +152,7 @@ tracker/
   flights.py       keyless Google Flights one-way reader
   parse_gf_md.py   fallback parser for pages that only render client-side
   destinations.py  add, remove, enable and list what is tracked
+  serve.py         the viewer plus a small API, so the browser can manage it
   export_globe.py  database -> the two JSON files the viewer reads
   make_sample.py   generates the sample dataset
   run.sh           cron entry point
