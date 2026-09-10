@@ -136,11 +136,14 @@ h1 i{font-style:italic;color:var(--dim)}
 .optrow:hover{background:var(--panel-2)}
 .optrow.on{background:var(--panel-2);border-left-color:var(--text)}
 .opt{display:flex;flex:1;min-width:0;gap:13px;padding:10px 6px 10px 20px;align-items:flex-start}
-.book{display:flex;align-items:center;padding:0 16px 0 8px;flex:none;text-decoration:none;
-  font-family:var(--f-mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--faint);border-left:1px solid rgba(255,255,255,.05)}
-.book:hover{color:var(--text);background:rgba(255,255,255,.04)}
-.book span{white-space:nowrap}
+.book{display:flex;align-items:center;padding:0 14px;flex:none;text-decoration:none;
+  border-left:1px solid var(--rule)}
+.book span{white-space:nowrap;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--dim);border:1px solid var(--rule-2);
+  padding:5px 9px;transition:color .15s,border-color .15s,background .15s}
+.book:hover span,.book:focus-visible span{color:var(--ground);background:var(--text);
+  border-color:var(--text)}
+.optrow:hover .book span{color:var(--text);border-color:var(--text)}
 .opt .p{font-family:var(--f-mono);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;
   min-width:62px;letter-spacing:-.01em}
 .opt .w{flex:1;min-width:0}
