@@ -1006,8 +1006,38 @@ function setStops(codes, o){
 
 var MANAGE = false, mgKind = 'watch', mgBusy = false, mgOpen = false;
 
+/* Served on its own the API needs no credential, because it is listening on
+   loopback. Embedded in a page that has already signed the user in, it borrows
+   that session rather than inventing a second one: ask the host for its access
+   token, and the server verifies the signature. Framing is same-origin only,
+   so the host asking is the host that embedded us. */
+var sessionToken = null;
+function askHostForSession(){
+  return new Promise(function(resolve){
+    if(window.parent === window) return resolve(null);
+    var settled = false;
+    function onMsg(e){
+      if(e.origin !== window.location.origin) return;
+      if(!e.data || e.data.type !== 'fare-atlas:session') return;
+      settled = true;
+      window.removeEventListener('message', onMsg);
+      resolve(e.data.token || null);
+    }
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({type:'fare-atlas:need-session'}, window.location.origin);
+    setTimeout(function(){
+      if(settled) return;
+      window.removeEventListener('message', onMsg);
+      resolve(null);                       /* host does not speak this: carry on */
+    }, 900);
+  });
+}
+
 function api(path, opts){
-  return fetch('api/' + path, Object.assign({headers:{'Content-Type':'application/json'}}, opts || {}))
+  opts = opts || {};
+  var headers = {'Content-Type':'application/json'};
+  if(sessionToken) headers.Authorization = 'Bearer ' + sessionToken;
+  return fetch('api/' + path, Object.assign({}, opts, {headers: headers}))
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(j){
         if(!r.ok) throw new Error(j.error || ('request failed: ' + r.status));
@@ -1150,11 +1180,15 @@ function buildManage(state){
 function initManage(){
   fetch('api/health').then(function(r){ return r.ok ? r.json() : null; })
     .then(function(h){
-      if(!h || !h.writable) return;
-      MANAGE = true;
-      return api('destinations').then(buildManage);
+      if(!h || !h.writable) return null;
+      return (h.auth === 'session' ? askHostForSession() : Promise.resolve(null));
     })
-    .catch(function(){ /* served statically: nothing to manage */ });
+    .then(function(tok){
+      if(tok === undefined) return;
+      sessionToken = tok;
+      return api('destinations').then(function(st){ MANAGE = true; buildManage(st); });
+    })
+    .catch(function(){ /* served statically, or not signed in: nothing to manage */ });
 }
 
 /* swing the globe so a destination and the origin are both in shot */
