@@ -6,16 +6,17 @@
   python3 serve.py --host 0.0.0.0 --token "$FARE_API_TOKEN"
 
 Without this, changing destinations means editing config.yaml or running
-destinations.py on whatever machine the tracker lives on. That is fine from a
-terminal and useless from a phone, so the same operations are exposed over
+destinations.py on the machine the tracker happens to live on. That makes the
+tool awkward to hand to anyone else, so the same operations are exposed over
 HTTP and the viewer grows a Manage panel when it finds them.
 
 Security posture, because this writes to a config file and triggers pricing:
 
   * Binds to 127.0.0.1 by default. Nothing is reachable off the machine.
-  * Binding anywhere else REQUIRES --token (or FARE_API_TOKEN), compared in
-    constant time. It refuses to start otherwise rather than quietly listening
-    on a public interface with no auth.
+  * Binding anywhere else REQUIRES a credential and refuses to start without
+    one, rather than quietly listening on a public interface with no auth.
+    Either a shared --token, compared in constant time, or FARE_JWT_SECRET to
+    accept the session of a site that has already signed the user in.
   * Every field is validated and bounded before it reaches the config: IATA
     codes must be three letters, dates must be real ISO dates, numbers are
     range-checked. Nothing is interpolated into a shell; destinations.py is
@@ -23,7 +24,7 @@ Security posture, because this writes to a config file and triggers pricing:
   * Writes go through destinations.py, which reparses the config afterwards
     and rolls back if the result would not load.
 """
-import argparse, datetime, hmac, json, os, re, sys, threading
+import argparse, base64, datetime, hashlib, hmac, json, os, re, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -41,6 +42,50 @@ LOCK = threading.Lock()                                     # one writer at a ti
 
 class Bad(Exception):
     pass
+
+
+# ------------------------------------------------------- session auth
+# Optional, and off by default. When this server sits behind a site that
+# already signs the user in with Supabase, it can accept that session
+# rather than inventing a second credential: the page passes its access
+# token, and this verifies the signature with the project's JWT secret.
+# HS256 is symmetric, so this needs no library.
+#
+#   FARE_JWT_SECRET   the project's JWT secret
+#   FARE_JWT_SUBJECTS comma-separated user ids allowed to write
+#
+# A bearer token embedded in a public page would not be a secret. A signed
+# session belonging to a named user is.
+JWT_SECRET = os.environ.get("FARE_JWT_SECRET", "")
+JWT_SUBJECTS = [x.strip() for x in os.environ.get("FARE_JWT_SUBJECTS", "").split(",") if x.strip()]
+
+
+def _b64(seg):
+    return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+
+
+def verify_session(header):
+    """True if `header` carries a live, correctly signed token for an allowed
+    user. Never raises: any malformed input is simply not authorised."""
+    try:
+        if not header.startswith("Bearer "):
+            return False
+        tok = header[7:].strip()
+        h, p, sig = tok.split(".")
+        head = json.loads(_b64(h))
+        if head.get("alg") != "HS256":
+            return False                      # no alg confusion, no "none"
+        want = hmac.new(JWT_SECRET.encode(), ("%s.%s" % (h, p)).encode(), hashlib.sha256).digest()
+        if not hmac.compare_digest(_b64(sig), want):
+            return False
+        body = json.loads(_b64(p))
+        if body.get("exp", 0) <= time.time():
+            return False
+        if body.get("role") != "authenticated":
+            return False                      # the anon key is signed too
+        return (not JWT_SUBJECTS) or (body.get("sub") in JWT_SUBJECTS)
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------- validation
@@ -168,6 +213,7 @@ def op_remove(c):
 class Handler(BaseHTTPRequestHandler):
     server_version = "fare-atlas"
     token = None
+    remote = False
 
     def _send(self, status, payload=None, ctype="application/json"):
         body = b"" if payload is None else (
@@ -182,11 +228,12 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _authed(self):
+        auth = self.headers.get("Authorization", "")
+        if JWT_SECRET and verify_session(auth):
+            return True
         if not Handler.token:
-            return True                                     # loopback-only mode
-        got = self.headers.get("Authorization", "")
-        want = "Bearer " + Handler.token
-        return hmac.compare_digest(got, want)
+            return not (JWT_SECRET or Handler.remote)       # loopback, no auth needed
+        return hmac.compare_digest(auth, "Bearer " + Handler.token)
 
     def _json_body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -197,7 +244,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
-            return self._send(200, dict(ok=True, writable=True))
+            return self._send(200, dict(ok=True, writable=True,
+                                        auth="session" if JWT_SECRET else
+                                             ("token" if Handler.token else "none")))
         if path == "/api/destinations":
             if not self._authed():
                 return self._send(401, dict(error="unauthorised"))
@@ -259,13 +308,15 @@ def main():
     ap.add_argument("--token", default=os.environ.get("FARE_API_TOKEN", ""))
     args = ap.parse_args()
 
-    if args.host not in ("127.0.0.1", "localhost", "::1") and not args.token:
-        sys.exit("refusing to listen on %s without --token: this API writes to your "
-                 "config and starts pricing runs." % args.host)
+    Handler.remote = args.host not in ("127.0.0.1", "localhost", "::1")
+    if Handler.remote and not (args.token or JWT_SECRET):
+        sys.exit("refusing to listen on %s without --token or FARE_JWT_SECRET: this API "
+                 "writes to your config and starts pricing runs." % args.host)
     Handler.token = args.token or None
 
     print("viewer  http://%s:%d/" % (args.host, args.port))
-    print("api     %s" % ("token required" if Handler.token else "loopback only, no token"))
+    print("api     %s" % ("session (Supabase JWT)" if JWT_SECRET else
+                          ("shared token" if Handler.token else "loopback only, no auth")))
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
 
