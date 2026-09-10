@@ -1021,9 +1021,23 @@ var AIRPORTS = [];
    token, and the server verifies the signature. Framing is same-origin only,
    so the host asking is the host that embedded us. */
 var sessionToken = null;
+function sessionFromStorage(){
+  /* Opened directly rather than embedded there is no parent to ask, but the
+     page is served from the same origin as whatever signed you in, so the
+     session is right there. Only looked for when the data names the key. */
+  var key = (FARES.page || {}).session_storage_key;
+  if(!key) return null;
+  try {
+    var raw = window.localStorage.getItem(key);
+    if(!raw) return null;
+    var parsed = JSON.parse(raw);
+    return (parsed && parsed.access_token) || null;
+  } catch(e){ return null; }
+}
+
 function askHostForSession(){
   return new Promise(function(resolve){
-    if(window.parent === window) return resolve(null);
+    if(window.parent === window) return resolve(sessionFromStorage());
     var settled = false;
     function onMsg(e){
       if(e.origin !== window.location.origin) return;

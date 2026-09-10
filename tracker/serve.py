@@ -99,7 +99,13 @@ def verify_session(header):
         uid = None                                  # unreachable or rejected
 
     if uid and ALLOWED and uid not in ALLOWED:
+        sys.stderr.write("  refused: %s is not in FARE_ALLOWED_SUBS\n" % uid)
         uid = None
+    elif uid:
+        # An audit line, and the only practical way to learn your own user id
+        # before locking FARE_ALLOWED_SUBS down to it. Cached, so this is at
+        # most once a minute per session, not once per request.
+        sys.stderr.write("  session verified: %s\n" % uid)
 
     if len(_seen) >= _SEEN_MAX:
         _seen.clear()

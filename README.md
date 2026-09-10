@@ -191,6 +191,34 @@ the coordinate is then a one-line fix.
 Prices are per person and in whatever currency you configure. They are what the
 reader saw at that moment, not a quote.
 
+## Security
+
+Nothing here needs an account, and the defaults assume you are running it for
+yourself on your own machine.
+
+`serve.py` binds to `127.0.0.1`. On any other interface it refuses to start
+without a credential rather than listening in the open. It writes to your
+config and starts pricing runs, so that refusal is deliberate.
+
+Two credentials are possible. A shared `--token`, compared in constant time.
+Or, when the page is embedded in a site that already signs the user in with
+Supabase, that session: the page passes its access token and the server asks
+Supabase whether it is live and whose it is. That second mode was chosen over
+verifying the signature locally because it keeps the project's JWT secret off
+the machine entirely, and it survives a project moving to asymmetric keys.
+`FARE_ALLOWED_SUBS` narrows it further to named users.
+
+Every field is validated and bounded before it reaches your config: three
+letter airport codes, real ISO dates, range-checked numbers, a cabin
+allowlist. Nothing is interpolated into a shell. Writes go through
+`destinations.py`, which reparses the config afterwards and restores the
+previous file if the result would not load. Static file serving is confined to
+the viewer directory, so `..` goes nowhere.
+
+`config.yaml`, the database and any `.env` are gitignored from the first
+commit. They hold where you are going and what you will pay, which is nobody
+else's business.
+
 ## Licence
 
 MIT.
