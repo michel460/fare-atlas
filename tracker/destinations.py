@@ -25,8 +25,10 @@ is not loadable.
 import argparse, datetime, os, shutil, sys
 import yaml
 
+import faconfig
+
 DIR = os.path.dirname(os.path.abspath(__file__))
-CFG_PATH = os.path.join(DIR, "config.yaml")
+CFG_PATH = faconfig.path()
 
 PALETTE = ["#6FD9CF", "#F0A44A", "#5EA8F0", "#B9DE55",
            "#A78BFA", "#F2789B", "#F26B5E", "#7FD1B9", "#E8C468"]
@@ -34,8 +36,7 @@ PALETTE = ["#6FD9CF", "#F0A44A", "#5EA8F0", "#B9DE55",
 
 # ---------------------------------------------------------------- helpers
 def load():
-    with open(CFG_PATH) as fh:
-        return yaml.safe_load(fh)
+    return faconfig.load()
 
 
 def lines():
@@ -317,7 +318,10 @@ def main():
         p.set_defaults(fn=fn)
 
     args = ap.parse_args()
-    args.fn(args)
+    try:
+        args.fn(args)
+    except faconfig.Missing as e:
+        sys.exit(str(e))
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, DIR)
 import destinations as D                                    # noqa: E402
+import faconfig                                            # noqa: E402
 from airports import choices as airport_choices            # noqa: E402
 
 VIEWER = os.path.abspath(os.path.join(DIR, "..", "viewer"))
@@ -293,7 +294,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/destinations":
             if not self._authed():
                 return self._send(401, dict(error="unauthorised"))
-            return self._send(200, op_list())
+            try:
+                return self._send(200, op_list())
+            except faconfig.Missing as e:
+                return self._send(503, dict(error=str(e)))
         return self._static(path)
 
     def do_POST(self):
@@ -321,6 +325,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, dict(error=str(e)))
         except SystemExit as e:                             # destinations.py rejects it
             return self._send(400, dict(error=str(e)))
+        except faconfig.Missing as e:
+            return self._send(503, dict(error=str(e)))
         except Exception as e:
             return self._send(500, dict(error="%s: %s" % (type(e).__name__, e)))
 

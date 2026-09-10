@@ -1,7 +1,7 @@
 # Fare Atlas
 
-A standing fare tracker that prices every way the world will route you somewhere,
-every morning, and draws the answer on a globe.
+A standing fare tracker that prices every way the world will route you
+somewhere, every morning, and draws the answer on a globe.
 
 It grew out of a specific problem. I live on an island with almost no long-haul
 service, so every trip is a connection, and "is this a good price?" is not a
@@ -17,8 +17,8 @@ because mixing carriers is usually cheaper and Google's round-trip endpoint
 hides it. You get an alert when the cheapest combination moves more than a few
 percent, and a digest on Sundays.
 
-**Sweeps places you have no dates for.** A destination with a 270-day horizon
-sampled two dates a day takes months to see. So each run one destination takes
+**Sweeps places you have no dates for.** A destination with a 270-day horizon,
+sampled two dates a day, takes months to see. So each run one destination takes
 its turn at a **sweep**, pricing dates spread across its whole horizon to find
 the cheap month, while every other destination **refines** around its best known
 departure to find the cheap week inside it. Set a price you would jump on and it
@@ -27,8 +27,44 @@ tells you when the fare goes under.
 **Draws it.** The viewer is a globe with a great-circle arc per routing. Click a
 destination for every itinerary priced today, ranked by cheapest, fastest, or a
 balance of the two, with the stopovers marked on the map and the layover written
-into the hub's label. Every row links straight out to that search on Google
-Flights, so finding a fare and going to book it are the same gesture.
+into the hub's label. Every row links out to that search on Google Flights, so
+finding a fare and going to book it are the same gesture.
+
+## Getting started
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install pyyaml selectolax fast-flights
+
+cp config.example.yaml config.yaml     # then edit it
+cd tracker && ../.venv/bin/python serve.py
+```
+
+Open <http://127.0.0.1:8712>. The viewer comes up on a bundled sample dataset,
+so there is something to look at before you have priced anything of your own.
+
+To price your own trips:
+
+```bash
+cd tracker
+../.venv/bin/python tracker.py daily     # trips with fixed dates
+../.venv/bin/python watchlist.py daily   # destinations without dates
+../.venv/bin/python export_globe.py ../viewer/data
+```
+
+Then serve it with `serve.py --data-dir ../viewer/data`, or change the one line
+near the top of `viewer/index.html` that points at `./sample`.
+
+`config.yaml` is gitignored. It holds your dates, your destinations and your
+prices, and none of that belongs in a repository. Set `FARE_CONFIG` to keep it
+somewhere else entirely.
+
+For a daily run, `tracker/run.sh` is the cron entry point. It prices the
+fixed-date trips, then the watchlist, then re-exports the viewer's data.
+
+Alerts go to whatever `FARE_NOTIFY_CMD` points at: any executable taking
+`--header` and reading the body on stdin. Leave it unset and everything prints
+to the console instead.
 
 ## Managing what it tracks
 
@@ -36,22 +72,13 @@ The quickest way is the browser. `serve.py` serves the viewer and a small API
 behind it, and the viewer grows a **Manage destinations** panel when it finds
 one: add, pause and remove without touching a file.
 
-```bash
-cd tracker && python3 serve.py        # http://127.0.0.1:8712
-```
+The form takes a **From** and a **To**, both autocompleting over the airports
+the tool knows, and naming an airport fills in its city. Most trips leave from
+the same place, so From is prefilled with your configured origin; override it
+and that destination is priced from somewhere else.
 
-The form takes a **From** and a **To**, both with autocomplete over the
-airports the tool knows, and naming an airport fills in its city. Most trips
-leave from the same place, so From is prefilled with your configured origin;
-override it and that destination is priced from somewhere else.
-
-It binds to loopback, so nothing is reachable off the machine. Binding anywhere
-else requires `--token` and refuses to start without one, because this API
-writes to your config and starts pricing runs. Every field is validated and
-bounded before it reaches the config, and nothing is ever passed to a shell.
-
-Served as plain files instead, as a published copy would be, there is no API to
-find and the panel simply does not appear.
+Served as plain files instead, there is no API to find and the panel does not
+appear, so a published copy is read-only by construction.
 
 The same operations are a CLI, which is what the server calls:
 
@@ -83,7 +110,7 @@ reasoning lives. Each write is validated by reparsing and rolled back if the
 result would not load, because a tracker that cannot read its config does not
 run at all.
 
-Nothing else needs restarting. The next run picks up the change.
+Nothing needs restarting. The next run picks up the change.
 
 ## Two readers, and why
 
@@ -109,41 +136,14 @@ That single decision is why the tracker can afford to check ±3 days on every
 leg, every day, and why it found a business fare $924 cheaper by leaving three
 days early.
 
-## Running it
-
-```bash
-python3 -m venv .venv && .venv/bin/pip install pyyaml selectolax fast-flights
-cp config.example.yaml config.yaml     # then edit it
-cd tracker && ../.venv/bin/python tracker.py daily
-```
-
-`config.yaml` is gitignored. It holds your dates, your destinations and your
-prices, and none of that belongs in a repository.
-
-Alerts go to whatever `FARE_NOTIFY_CMD` points at: any executable taking
-`--header` and reading the body on stdin. Leave it unset and everything prints
-to the console instead.
-
-For a daily run, `tracker/run.sh` is the cron entry point. It runs the
-fixed-date trips, then the watchlist, then re-exports the viewer's data. The
-watchlist runs with its exit code deliberately swallowed, so a reader failure
-can never cost you a fixed-date alert; it reports its own failures instead of
-going quiet with stale numbers.
-
 ## The viewer
 
-```bash
-cd tracker && python3 serve.py       # viewer plus the manage API
-cd viewer  && python3 -m http.server # viewer alone, read only
-```
+No build step. One HTML file, three.js vendored beside it, and two JSON files
+written by `export_globe.py`.
 
-It ships with a generated sample dataset so it runs straight from a checkout.
-Point `DATA` at your own export to see your own trips.
-
-The viewer knows nothing about any particular journey. Destinations, colours,
-the origin airport and the headline all arrive in `fares.json`, which
-`export_globe.py` writes from the database. Swapping in your own data is the
-only step.
+It knows nothing about any particular journey. Destinations, colours, origins
+and the headline all arrive in `fares.json`, so pointing it at a different
+export is the only step needed to make it yours.
 
 There are no coastlines on the globe. A graticule and the airports are honest;
 hand-drawn continents would have been decoration pretending to be data.
@@ -151,19 +151,21 @@ hand-drawn continents would have been decoration pretending to be data.
 ## Layout
 
 ```
+config.example.yaml  copy to config.yaml and edit
 tracker/
   tracker.py       fixed-date trips: fetch, store, compare, alert, digest
   watchlist.py     no-date destinations: sweep, refine, alert on a price worth taking
   flights.py       keyless Google Flights one-way reader
   parse_gf_md.py   fallback parser for pages that only render client-side
-  airports.py      the airports the tools can place and offer for autocomplete
   destinations.py  add, remove, enable and list what is tracked
   serve.py         the viewer plus a small API, so the browser can manage it
   export_globe.py  database -> the two JSON files the viewer reads
+  airports.py      the airports the tools can place and offer for autocomplete
+  faconfig.py      finds and loads config.yaml
   make_sample.py   generates the sample dataset
   run.sh           cron entry point
 viewer/
-  index.html       the globe, three.js, no build step
+  index.html       the globe
   sample/          invented data so the page runs out of the box
 ```
 
@@ -171,25 +173,6 @@ Everything is stored in one SQLite file. Observations, the per-run best, the
 alerts that fired and a receipt for every run, which matters more than it
 sounds: when a fare tracker goes quiet you want to know whether the fares
 stopped moving or the tracker stopped working.
-
-## Notes worth knowing
-
-Round-trip queries against the keyless reader return an empty block. Price each
-direction one-way and add them; you were going to do that anyway to mix
-carriers.
-
-Some city pairs load entirely client-side and return nothing to any static read.
-Those need a rendered scrape, which `parse_gf_md.py` parses. Google's markdown
-uses narrow and non-breaking spaces around AM/PM, so normalise before matching.
-
-Airports need coordinates to be drawn, and they live in one place,
-`airports.py`, shared by the exporter and the picker. New hubs appear as fares
-change, so the exporter drops any routing through an airport it cannot place
-**and names it**, rather than letting one unknown code blank the page. Adding
-the coordinate is then a one-line fix.
-
-Prices are per person and in whatever currency you configure. They are what the
-reader saw at that moment, not a quote.
 
 ## Security
 
@@ -209,22 +192,42 @@ the machine entirely, and it survives a project moving to asymmetric keys.
 `FARE_ALLOWED_SUBS` narrows it further to named users.
 
 Every field is validated and bounded before it reaches your config: three
-letter airport codes, real ISO dates, range-checked numbers, a cabin
-allowlist. Nothing is interpolated into a shell. Writes go through
-`destinations.py`, which reparses the config afterwards and restores the
-previous file if the result would not load. Static file serving is confined to
-the viewer directory, so `..` goes nowhere.
+letter airport codes, real ISO dates, range-checked numbers, a cabin allowlist.
+Nothing is interpolated into a shell. Writes go through `destinations.py`, which
+reparses the config afterwards and restores the previous file if the result
+would not load. Static file serving is confined to the viewer directory, so
+`..` goes nowhere.
 
-`config.yaml`, the database and any `.env` are gitignored from the first
-commit. They hold where you are going and what you will pay, which is nobody
-else's business.
-
-The same applies to the export. `fares.json` names your home airport and the
-dates you will be away from it, so publishing the viewer on a host anyone can
-reach means publishing your travel schedule. If the page is reachable, serve
-the data through `serve.py`'s `/api/data/*` endpoints, which require the same
+`config.yaml`, the database and any `.env` are gitignored from the first commit.
+The same care belongs on the export: `fares.json` names your home airport and
+the dates you will be away from it, so publishing the viewer where anyone can
+reach it publishes your travel schedule. If the page is reachable, serve the
+data through `serve.py`'s `/api/data/*` endpoints, which require the same
 session as a write, and stop the web server handing out the files directly.
 Signed out, the page loads and shows nothing.
+
+## Notes worth knowing
+
+Round-trip queries against the keyless reader return an empty block. Price each
+direction one-way and add them; you were going to do that anyway to mix
+carriers.
+
+Some city pairs load entirely client-side and return nothing to any static read.
+Those need a rendered scrape, which `parse_gf_md.py` parses. Google's markdown
+uses narrow and non-breaking spaces around AM/PM, so normalise before matching.
+
+Airports need coordinates to be drawn, and they live in one place,
+`airports.py`, shared by the exporter and the picker. New hubs appear as fares
+change, so the exporter drops any routing through an airport it cannot place
+**and names it**, rather than letting one unknown code blank the page. Adding
+the coordinate is then a one-line fix.
+
+Only legs from the same bookable pair of dates are ever combined. A watchlist
+run samples several candidate pairs, so pairing the cheapest outbound with a
+return from a different candidate would invent a trip nobody can buy.
+
+Prices are per person, in whatever currency you configure. They are what the
+reader saw at that moment, not a quote.
 
 ## Licence
 

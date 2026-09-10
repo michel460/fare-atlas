@@ -7,7 +7,12 @@ import yaml
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, DIR)
-CFG = yaml.safe_load(open(os.path.join(DIR, "config.yaml")))
+import faconfig
+
+try:
+    CFG = faconfig.load()
+except faconfig.Missing as _e:          # a first run, not a crash
+    sys.exit(str(_e))
 DB = os.path.join(DIR, "fares.db")
 SGT = datetime.timezone(datetime.timedelta(hours=8))
 NOW = datetime.datetime.now(SGT)
