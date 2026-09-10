@@ -172,9 +172,12 @@ def cmd_watch(args):
     if end is None:
         sys.exit("no `watchlist:` section in config.yaml")
 
+    home = (args.origin or cfg.get("origin") or "").upper()
     blk = ["  - id: %s" % args.code,
-           "    name: %s -> %s" % (cfg.get("origin", "???"), args.city or args.code),
+           "    name: %s -> %s" % (home or "???", args.city or args.code),
            "    dest: %s" % args.code]
+    if home and home != (cfg.get("origin") or ""):
+        blk.append("    origin: %s" % home)
     if args.city:
         blk.append("    city: %s" % args.city)
     blk.append('    colour: "%s"' % (args.colour or next_colour(cfg)))
@@ -205,7 +208,7 @@ def cmd_trip(args):
     if end is None:
         sys.exit("no `trips:` section in config.yaml")
 
-    origin = cfg.get("origin", "???")
+    origin = (args.origin or cfg.get("origin") or "???").upper()
     cabins = [c.strip() for c in args.cabins.split(",") if c.strip()]
     ow = flex_dates(args.out, args.flex) if args.flex else []
     rw = flex_dates(args.ret, args.flex) if args.flex else []
@@ -288,6 +291,7 @@ def main():
     w.add_argument("--window", nargs=2, metavar=("START", "END"),
                    help="pin to a fixed window instead of a rolling horizon")
     w.add_argument("--max-stops", type=int, default=2)
+    w.add_argument("--origin", help="fly from here instead of the configured origin")
     w.add_argument("--colour")
     w.set_defaults(fn=cmd_watch)
 
@@ -301,6 +305,7 @@ def main():
     t.add_argument("--cabins", default="economy")
     t.add_argument("--max-stops", type=int, default=1)
     t.add_argument("--source", default="fastflights", choices=["fastflights", "serpapi"])
+    t.add_argument("--origin", help="fly from here instead of the configured origin")
     t.add_argument("--colour")
     t.set_defaults(fn=cmd_trip)
 

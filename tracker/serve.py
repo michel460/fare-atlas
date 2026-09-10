@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, DIR)
 import destinations as D                                    # noqa: E402
+from airports import choices as airport_choices            # noqa: E402
 
 VIEWER = os.path.abspath(os.path.join(DIR, "..", "viewer"))
 CODE_RE = re.compile(r"^[A-Z]{3}$")
@@ -158,13 +159,13 @@ def op_list():
     cfg = D.load()
     trips = [dict(code=t["id"], city=t.get("city", ""), kind="trip",
                   why=t.get("why", ""), colour=t.get("colour"),
-                  out=t["out"]["core"], ret=t["ret"]["core"],
+                  origin=t.get("origin"), out=t["out"]["core"], ret=t["ret"]["core"],
                   flex=len(t["out"].get("window") or []) // 2,
                   cabins=t.get("cabins", []), enabled=True)
              for t in (cfg.get("trips") or [])]
     watch = [dict(code=w["dest"], city=w.get("city", ""), kind="watch",
                   why=w.get("why", ""), colour=w.get("colour"),
-                  nights=w.get("nights"), target=w.get("target_rt"),
+                  origin=w.get("origin"), nights=w.get("nights"), target=w.get("target_rt"),
                   window=w.get("window"), horizon=w.get("horizon_days"),
                   enabled=bool(w.get("enabled", True)))
              for w in (cfg.get("watchlist") or [])]
@@ -176,9 +177,12 @@ def op_add(body):
     if kind not in ("watch", "trip"):
         raise Bad("kind must be 'watch' or 'trip'")
     a = Args(code=code(body.get("code")),
+             origin=code(body["origin"]) if body.get("origin") else None,
              city=text(body.get("city"), "city") or None,
              why=text(body.get("why"), "why"),
              colour=colour(body.get("colour")))
+    if a["origin"] and a["origin"] == a["code"]:
+        raise Bad("from and to are the same airport")
 
     if kind == "watch":
         a["nights"] = num(body.get("nights", 14), "nights", 1, 90)
@@ -265,6 +269,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, dict(ok=True, writable=True,
                                         auth="session" if SESSION_AUTH else
                                              ("token" if Handler.token else "none")))
+        if path == "/api/airports":
+            return self._send(200, dict(airports=airport_choices()))
         if path == "/api/destinations":
             if not self._authed():
                 return self._send(401, dict(error="unauthorised"))

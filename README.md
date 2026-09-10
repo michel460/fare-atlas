@@ -40,6 +40,11 @@ one: add, pause and remove without touching a file.
 cd tracker && python3 serve.py        # http://127.0.0.1:8712
 ```
 
+The form takes a **From** and a **To**, both with autocomplete over the
+airports the tool knows, and naming an airport fills in its city. Most trips
+leave from the same place, so From is prefilled with your configured origin;
+override it and that destination is priced from somewhere else.
+
 It binds to loopback, so nothing is reachable off the machine. Binding anywhere
 else requires `--token` and refuses to start without one, because this API
 writes to your config and starts pricing runs. Every field is validated and
@@ -151,6 +156,7 @@ tracker/
   watchlist.py     no-date destinations: sweep, refine, alert on a price worth taking
   flights.py       keyless Google Flights one-way reader
   parse_gf_md.py   fallback parser for pages that only render client-side
+  airports.py      the airports the tools can place and offer for autocomplete
   destinations.py  add, remove, enable and list what is tracked
   serve.py         the viewer plus a small API, so the browser can manage it
   export_globe.py  database -> the two JSON files the viewer reads
@@ -176,9 +182,11 @@ Some city pairs load entirely client-side and return nothing to any static read.
 Those need a rendered scrape, which `parse_gf_md.py` parses. Google's markdown
 uses narrow and non-breaking spaces around AM/PM, so normalise before matching.
 
-Airports need coordinates to be drawn. New hubs appear as fares change, so the
-exporter drops any routing through an airport it cannot place **and names it**,
-rather than letting one unknown code blank the page.
+Airports need coordinates to be drawn, and they live in one place,
+`airports.py`, shared by the exporter and the picker. New hubs appear as fares
+change, so the exporter drops any routing through an airport it cannot place
+**and names it**, rather than letting one unknown code blank the page. Adding
+the coordinate is then a one-line fix.
 
 Prices are per person and in whatever currency you configure. They are what the
 reader saw at that moment, not a quote.

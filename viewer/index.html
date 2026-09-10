@@ -278,6 +278,15 @@ var AP = FARES.airports, TAU = Math.PI*2;
 /* Where every trip starts. Comes from the data, so the viewer is not
    tied to one airport. */
 var ORIGIN = FARES.origin || 'DPS';
+
+/* Destinations may be flown from different places, so the origin is a
+   property of the trip rather than of the page. */
+var TRIP_ORIGIN = {};
+(FARES.trips || []).forEach(function(t){ TRIP_ORIGIN[t.id] = t.origin || ORIGIN; });
+function originOf(id){ return TRIP_ORIGIN[id] || ORIGIN; }
+var ORIGINS = {};
+Object.keys(TRIP_ORIGIN).forEach(function(k){ ORIGINS[TRIP_ORIGIN[k]] = 1; });
+ORIGINS[ORIGIN] = 1;
 var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* Trips, colours and headline all arrive with the data. */
@@ -308,11 +317,6 @@ function km(a, b){
           Math.cos(A.lat*d)*Math.cos(B.lat*d)*Math.sin(dLon/2)*Math.sin(dLon/2);
   return 2*R*Math.asin(Math.min(1, Math.sqrt(s)));
 }
-function pathKm(codes){
-  var t = 0;
-  for(var i=0;i<codes.length-1;i++) t += km(codes[i], codes[i+1]);
-  return t;
-}
 
 /* great circle, lifted by an amount proportional to how far it goes */
 function arcPoints(a, b, segs){
@@ -342,8 +346,9 @@ function routePoints(codes){
 }
 function legCodes(r){
   var dest = r.trip;
-  return r.leg === 'out' ? [ORIGIN].concat(r.via, [dest])
-                         : [dest].concat(r.via, [ORIGIN]);
+  var home = originOf(r.trip);
+  return r.leg === 'out' ? [home].concat(r.via, [dest])
+                         : [dest].concat(r.via, [home]);
 }
 
 /* ── scene ────────────────────────────────────────────────── */
@@ -429,8 +434,8 @@ function buildNodes(){
   Object.keys(AP).forEach(function(code){
     var t = null, i;
     for(i=0;i<TRIPS.length;i++) if(TRIPS[i].id === code) t = TRIPS[i];
-    var isEnd = t || code === ORIGIN;
-    var col = code === ORIGIN ? 0xFFFFFF : (t ? t.hex : 0x44536B);
+    var isEnd = t || ORIGINS[code];
+    var col = ORIGINS[code] ? 0xFFFFFF : (t ? t.hex : 0x44536B);
     var m = new THREE.Mesh(isEnd ? big : geo,
       new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:isEnd?1:0.75}));
     m.position.copy(apVec(code, 1.004));
@@ -553,11 +558,11 @@ function buildLabels(){
   Object.keys(AP).forEach(function(code){
     var a = AP[code], t = null, i;
     for(i=0;i<TRIPS.length;i++) if(TRIPS[i].id === code) t = TRIPS[i];
-    var isEnd = t || code === ORIGIN;
+    var isEnd = t || ORIGINS[code];
     var el = document.createElement('div');
     el.className = 'lb' + (isEnd ? '' : ' hub');
     el.dataset.hub = isEnd ? '0' : '1';
-    el.style.color = code === ORIGIN ? '#FFFFFF' : (t ? t.css : '');
+    el.style.color = ORIGINS[code] ? '#FFFFFF' : (t ? t.css : '');
     el.innerHTML = isEnd
       ? '<span>' + code + '<em>' + a.city + '</em></span>'
       : '<span>' + code + '</span>';
@@ -663,7 +668,7 @@ function buildCard(t, rail){
   b.style.setProperty('--c', t.css);
   b.setAttribute('aria-pressed', t.id === focus ? 'true' : 'false');
 
-  var direct = km(ORIGIN, t.id);
+  var direct = km(originOf(t.id), t.id);
   var w = FARES.watch[t.id];
   var sub = t.when
     ? t.when + (t.why ? ' \u00B7 ' + t.why : '')
@@ -779,8 +784,9 @@ function hhmm(m){ return Math.floor(m/60) + 'h' + ('0' + (m%60)).slice(-2); }
 
 var CABIN_WORD = {e:'economy', p:'premium economy', b:'business'};
 function searchUrl(dest, o){
-  var from = o.lg === 'out' ? ORIGIN : dest;
-  var to   = o.lg === 'out' ? dest : ORIGIN;
+  var home = originOf(dest);
+  var from = o.lg === 'out' ? home : dest;
+  var to   = o.lg === 'out' ? dest : home;
   var q = 'Flights from ' + from + ' to ' + to + ' on ' + o.d +
           ' one way ' + (CABIN_WORD[o.cb] || 'economy') +
           (o.st === 0 ? ' nonstop' : '');
@@ -818,7 +824,8 @@ function openDetail(id){
   var t = tripOf(id);
   document.getElementById('d-city').textContent = t.city;
   document.getElementById('d-meta').textContent =
-    id + ' \u00B7 ' + Math.round(km(ORIGIN, id)).toLocaleString('en-US') + ' km from ' + ((AP[ORIGIN] && AP[ORIGIN].city) || ORIGIN) + ' \u00B7 ' +
+    id + ' \u00B7 ' + Math.round(km(originOf(id), id)).toLocaleString('en-US') + ' km from ' +
+    ((AP[originOf(id)] && AP[originOf(id)].city) || originOf(id)) + ' \u00B7 ' +
     opts.length + ' itineraries priced';
 
   var tabs = document.getElementById('d-tabs');
@@ -944,7 +951,8 @@ window.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeDeta
 /* draw one chosen itinerary on the globe and mute the rest */
 var hiMesh = null;
 function optCodes(dest, o){
-  return o.lg === 'out' ? [ORIGIN].concat(o.v, [dest]) : [dest].concat(o.v, [ORIGIN]);
+  var home = originOf(dest);
+  return o.lg === 'out' ? [home].concat(o.v, [dest]) : [dest].concat(o.v, [home]);
 }
 function highlight(o){
   if(hiMesh){ globe.remove(hiMesh); hiMesh.geometry.dispose(); hiMesh.material.dispose(); hiMesh = null; }
@@ -1005,6 +1013,7 @@ function setStops(codes, o){
    stays out of the way. */
 
 var MANAGE = false, mgKind = 'watch', mgBusy = false, mgOpen = false;
+var AIRPORTS = [];
 
 /* Served on its own the API needs no credential, because it is listening on
    loopback. Embedded in a page that has already signed the user in, it borrows
@@ -1060,6 +1069,43 @@ function input(ph, type, value){
   return i;
 }
 
+/* One datalist, reused by both airport fields. Typing a code or a city name
+   narrows it, and anything not on the list is still accepted: the list is a
+   convenience, not the set of places you are allowed to go. */
+function airportList(){
+  var dl = document.getElementById('mg-airports');
+  if(dl) return dl;
+  dl = document.createElement('datalist');
+  dl.id = 'mg-airports';
+  AIRPORTS.forEach(function(a){
+    var o = document.createElement('option');
+    o.value = a.code;
+    o.label = a.city + ', ' + a.country;
+    dl.appendChild(o);
+  });
+  document.body.appendChild(dl);
+  return dl;
+}
+function airportInput(ph, value){
+  var i = input(ph);
+  i.setAttribute('list', 'mg-airports');
+  i.maxLength = 3;
+  i.autocomplete = 'off';
+  if(value) i.value = value;
+  i.addEventListener('input', function(){
+    i.value = i.value.toUpperCase().slice(0, 3);
+    var hit = null;
+    for(var k = 0; k < AIRPORTS.length; k++)
+      if(AIRPORTS[k].code === i.value) { hit = AIRPORTS[k]; break; }
+    i.title = hit ? hit.city + ', ' + hit.country : '';
+    if(i.dataset.fills){
+      var city = document.getElementById(i.dataset.fills);
+      if(hit && city && !city.dataset.touched) city.value = hit.city;
+    }
+  });
+  return i;
+}
+
 function buildManage(state){
   var old = document.getElementById('mg');
   if(old) old.remove();
@@ -1087,14 +1133,22 @@ function buildManage(state){
   });
   form.appendChild(kind);
 
-  var codeI = input('SYD'), cityI = input('Sydney'), whyI = input('friends');
-  codeI.maxLength = 3;
-  codeI.addEventListener('input', function(){ codeI.value = codeI.value.toUpperCase(); });
+  airportList();
+  var fromI = airportInput('SIN', state.origin || '');
+  var codeI = airportInput('SYD');
+  var cityI = input('Sydney'), whyI = input('friends');
+  cityI.id = 'mg-city';
+  cityI.addEventListener('input', function(){ cityI.dataset.touched = '1'; });
+  codeI.dataset.fills = 'mg-city';          /* picking a code names the city */
+
   var pair = document.createElement('div'); pair.className = 'mg2';
-  pair.appendChild(fieldRow('Airport', codeI));
-  pair.appendChild(fieldRow('City', cityI));
+  pair.appendChild(fieldRow('From', fromI));
+  pair.appendChild(fieldRow('To', codeI));
   form.appendChild(pair);
-  form.appendChild(fieldRow('Why', whyI));
+  var pairb = document.createElement('div'); pairb.className = 'mg2';
+  pairb.appendChild(fieldRow('City', cityI));
+  pairb.appendChild(fieldRow('Why', whyI));
+  form.appendChild(pairb);
 
   var a1, a2, a3;
   if(mgKind === 'watch'){
@@ -1120,6 +1174,7 @@ function buildManage(state){
   go.addEventListener('click', function(){
     if(mgBusy) return;
     var body = {kind:mgKind, code:codeI.value, city:cityI.value, why:whyI.value};
+    if(fromI.value && fromI.value !== state.origin) body.origin = fromI.value;
     if(mgKind === 'watch'){ body.target = a1.value; body.nights = a2.value; }
     else { body.out = a1.value; body.ret = a2.value; body.flex = a3.value; }
     mgBusy = true; go.disabled = true;
@@ -1150,7 +1205,8 @@ function buildManage(state){
     dot.className = 'c'; dot.style.background = d.colour || '#8B8A9C';
     var name = document.createElement('span');
     name.className = 'n' + (d.enabled ? '' : ' off');
-    name.textContent = d.code + '  ' + (d.city || '');
+    name.textContent = (d.origin && d.origin !== state.origin ? d.origin + '\u2192' : '') +
+                       d.code + '  ' + (d.city || '');
     li.appendChild(dot); li.appendChild(name);
 
     if(d.kind === 'watch'){
@@ -1186,6 +1242,12 @@ function initManage(){
     })
     .then(function(tok){
       sessionToken = tok;
+      return fetch('api/airports').then(function(r){ return r.ok ? r.json() : {airports:[]}; })
+        .then(function(a){ AIRPORTS = a.airports || []; return tok; })
+        .catch(function(){ return tok; });
+    })
+    .then(function(tok){
+      sessionToken = tok;
       return api('destinations');
     })
     .then(function(st){ MANAGE = true; buildManage(st); })
@@ -1195,7 +1257,7 @@ function initManage(){
 /* swing the globe so a destination and the origin are both in shot */
 var target = {yaw:0, pitch:0.30}, easing = false;
 function flyTo(code){
-  var a = AP[code], d = AP[ORIGIN];
+  var a = AP[code], d = AP[originOf(code)] || AP[ORIGIN];
   var midLon = midpointLon(d.lon, a.lon);
   var midLat = (d.lat + a.lat)/2;
   /* a Y rotation ADDS to a point's atan2(x,z) angle, so bringing

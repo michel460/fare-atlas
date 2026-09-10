@@ -131,13 +131,20 @@ def desc(x):
         x["price"], "/".join(x["airlines"])[:38], via, h, m)
 
 
+def origin_of(w):
+    """Where this destination is flown from: its own origin if it has one,
+    otherwise the configured default."""
+    return w.get("origin") or CFG.get("origin") or "DPS"
+
+
 def price_pair(w, out_date, nights, errors):
     """Price one candidate: out on out_date, back nights later."""
     dest, stops = w["dest"], int(w.get("max_stops", 2))
+    home = origin_of(w)
     ret_date = (datetime.date.fromisoformat(out_date) +
                 datetime.timedelta(days=int(nights))).isoformat()
     legs = {}
-    for leg, d, frm, to in (("out", out_date, "DPS", dest), ("ret", ret_date, dest, "DPS")):
+    for leg, d, frm, to in (("out", out_date, home, dest), ("ret", ret_date, dest, home)):
         r = one_way(d, frm, to, "economy", 1, max_stops=stops)
         if not r["ok"]:
             errors.append("{} {} {}: {}".format(dest, leg, d, str(r.get("error"))[:90]))
