@@ -63,6 +63,23 @@ trips:
     source: fastflights
     notes: "Blossom week is the whole point, so the dates do not move."
 
+  # A one-way leg. Omit `ret` entirely to price the outbound alone: useful for
+  # multi-city itineraries where two legs share a destination and want distinct
+  # ids. `id` here is the trip label, `dest` is the actual airport, so a second
+  # leg into the same city still gets drawn on the globe.
+  - id: MUC
+    name: Singapore -> Munich
+    origin: SIN
+    dest: MUC
+    city: Munich
+    colour: "#7FD1B9"
+    when: "one-way 15 Feb 2027"
+    why: "arriving via Munich"
+    out: {core: "2027-02-15", window: []}
+    cabins: [economy]
+    max_stops: 1
+    source: fastflights
+
 # ------------------------------------------------------------- no dates yet
 # Swept with the keyless reader, so these cost no API quota at all. Each run,
 # one destination takes its turn at a full-horizon sweep to find the cheap

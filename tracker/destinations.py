@@ -5,6 +5,7 @@
   destinations.py watch SYD --city Sydney --why friends --nights 10 --target 450
   destinations.py watch CPT --city "Cape Town" --window 2027-06-01 2027-06-30 --nights 14 --target 1100
   destinations.py trip  LHR --city London --out 2027-03-04 --ret 2027-03-18 --flex 3
+  destinations.py trip  MUC --city Munich  --out 2027-01-18            # one-way, no --ret
   destinations.py disable SYD
   destinations.py enable  SYD
   destinations.py remove  SYD
@@ -14,8 +15,13 @@ Two kinds of destination:
   trip   you know the dates. Priced every morning, alerts when the total moves.
          --flex N adds N days either side of each date; those extra dates are
          priced with the keyless reader, so flexibility costs no API quota.
+         Omit --ret to track a one-way leg; only the outbound is priced.
   watch  you know the place, not the dates. Swept across a horizon (or pinned
          to a --window) for a fare under --target.
+
+`--id` overrides the trip identifier. Handy when two trips share a dest, for
+example a direct outbound and a leg from a hub: they need different ids but
+`dest` is still the airport.
 
 config.yaml is edited as TEXT rather than reparsed and rewritten, because the
 comments in it explain the choices and a YAML round-trip would silently throw
@@ -149,8 +155,10 @@ def cmd_list(args):
     print("origin %s\n" % origin)
     print("fixed dates:")
     for t in cfg.get("trips") or []:
-        print("  %-4s %-14s %s to %s  %s  +/-%d days  %s"
-              % (t["id"], t.get("city", ""), t["out"]["core"], t["ret"]["core"],
+        when = ("%s to %s" % (t["out"]["core"], t["ret"]["core"])
+                if t.get("ret") else "%s (one-way)" % t["out"]["core"])
+        print("  %-4s %-14s %-25s  %s  +/-%d days  %s"
+              % (t["id"], t.get("city", ""), when,
                  ",".join(c[:3] for c in t.get("cabins", [])),
                  len(t["out"].get("window") or []) // 2,
                  t.get("why", "")))
@@ -202,8 +210,9 @@ def cmd_watch(args):
 
 def cmd_trip(args):
     cfg = load()
-    if args.code in known(cfg):
-        sys.exit("%s is already tracked. Remove it first, or edit config.yaml." % args.code)
+    tid = (args.id or args.code).upper()
+    if tid in known(cfg):
+        sys.exit("%s is already tracked. Remove it first, or edit config.yaml." % tid)
     ls = lines()
     end = block_end(ls, "trips")
     if end is None:
@@ -212,10 +221,11 @@ def cmd_trip(args):
     origin = (args.origin or cfg.get("origin") or "???").upper()
     cabins = [c.strip() for c in args.cabins.split(",") if c.strip()]
     ow = flex_dates(args.out, args.flex) if args.flex else []
-    rw = flex_dates(args.ret, args.flex) if args.flex else []
+    rw = flex_dates(args.ret, args.flex) if (args.ret and args.flex) else []
     fmt = lambda xs: "[" + ", ".join('"%s"' % x for x in xs) + "]"
+    when = ("%s to %s" % (args.out, args.ret)) if args.ret else ("one-way %s" % args.out)
 
-    blk = ["  - id: %s" % args.code,
+    blk = ["  - id: %s" % tid,
            "    name: %s -> %s" % (origin, args.city or args.code),
            "    origin: %s" % origin,
            "    dest: %s" % args.code]
@@ -223,9 +233,10 @@ def cmd_trip(args):
         blk.append("    city: %s" % args.city)
     blk.append('    colour: "%s"' % (args.colour or next_colour(cfg)))
     blk.append('    why: "%s"' % (args.why or ""))
-    blk.append('    when: "%s to %s"' % (args.out, args.ret))
+    blk.append('    when: "%s"' % when)
     blk.append("    out: {core: \"%s\", window: %s}" % (args.out, fmt(ow)))
-    blk.append("    ret: {core: \"%s\", window: %s}" % (args.ret, fmt(rw)))
+    if args.ret:
+        blk.append("    ret: {core: \"%s\", window: %s}" % (args.ret, fmt(rw)))
     blk.append("    cabins: [%s]" % ", ".join(cabins))
     blk.append("    max_stops: %d" % args.max_stops)
     blk.append("    source: %s" % args.source)
@@ -236,8 +247,13 @@ def cmd_trip(args):
         blk.append("    window_source: fastflights   # flexible dates are free, so they run daily")
 
     write(ls[:end] + blk + ls[end:])
-    print("tracking %s %s to %s%s" % (args.code, args.out, args.ret,
-                                      ", +/-%d days" % args.flex if args.flex else ""))
+    if args.ret:
+        print("tracking %s %s to %s%s" % (tid, args.out, args.ret,
+                                          ", +/-%d days" % args.flex if args.flex else ""))
+    else:
+        print("tracking %s one-way %s -> %s on %s%s" % (
+            tid, origin, args.code, args.out,
+            ", +/-%d days" % args.flex if args.flex else ""))
 
 
 def cmd_remove(args):
@@ -298,10 +314,11 @@ def main():
 
     t = sub.add_parser("trip", help="track a trip you have dates for")
     t.add_argument("code")
+    t.add_argument("--id", help="override the trip id (default: same as the dest code)")
     t.add_argument("--city")
     t.add_argument("--why", default="")
     t.add_argument("--out", required=True, help="outbound date, YYYY-MM-DD")
-    t.add_argument("--ret", required=True, help="return date, YYYY-MM-DD")
+    t.add_argument("--ret", help="return date, YYYY-MM-DD; omit for a one-way leg")
     t.add_argument("--flex", type=int, default=0, help="days either side of each date")
     t.add_argument("--cabins", default="economy")
     t.add_argument("--max-stops", type=int, default=1)

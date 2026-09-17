@@ -35,9 +35,20 @@ def main(out_dir):
                  "    python3 tracker.py daily")
     routes, missing = [], set()
 
+    # A trip's id is a label, not always an airport. Look up the actual
+    # origin/dest so routes with id != dest (e.g. two legs sharing a
+    # destination) or a non-default origin still get drawn.
+    _early_cfg = faconfig.load()
+    _default_origin = _early_cfg.get("origin", "DPS")
+    _trip_endpoints = {t["id"]: (t.get("origin") or _default_origin, t.get("dest") or t["id"])
+                       for t in (_early_cfg.get("trips") or [])}
+
     def add(trip, leg, via, al, stops, price, mins):
         via = [v for v in via if v]
-        for code in via + [trip, "DPS"]:
+        origin, dest = _trip_endpoints.get(trip, (_default_origin, trip))
+        # The leg direction: outbound is origin->dest, return is dest->origin.
+        endpoints = [origin, dest]
+        for code in via + endpoints:
             if code not in AP:
                 missing.add(code)
                 return
@@ -89,10 +100,11 @@ def main(out_dir):
     alerts += [dict(ts=t[:10], who=d, what=w) for t, d, w in rows(
         "SELECT ts,dest,reason FROM walerts WHERE reason NOT LIKE 'first%' ORDER BY ts")]
 
-    used = {"DPS"}
+    used = {_default_origin}
     for r in routes:
         used.update(r["via"])
-        used.add(r["trip"])
+        origin, dest = _trip_endpoints.get(r["trip"], (_default_origin, r["trip"]))
+        used.add(origin); used.add(dest)
 
     fares = dict(
         airports={k: dict(city=AP[k][0], country=AP[k][1], lat=AP[k][2], lon=AP[k][3]) for k in used},
@@ -139,6 +151,7 @@ def main(out_dir):
         maxstops[w["dest"]] = int(w.get("max_stops", 2))
 
     import datetime as _dt
+    one_ways = {t["id"] for t in (cfg.get("trips") or []) if not t.get("ret")}
     for dest in set(list(opts.keys())):
         outs = sorted({o["d"] for o in opts[dest] if o["lg"] == "out"})
         rets = sorted({o["d"] for o in opts[dest] if o["lg"] == "ret"})
@@ -148,6 +161,10 @@ def main(out_dir):
             pairs[dest] = [[d, (_dt.date.fromisoformat(d) + _dt.timedelta(days=n)).isoformat()]
                            for d in outs
                            if (_dt.date.fromisoformat(d) + _dt.timedelta(days=n)).isoformat() in rets]
+        elif dest in one_ways:
+            # No return leg. Emit an out date with null return so the viewer can
+            # tell a one-way from "return not priced yet".
+            pairs[dest] = [[d, None] for d in outs]
         else:
             pairs[dest] = [[a, b] for a in outs for b in rets]
     fares["maxStops"] = maxstops
@@ -164,7 +181,8 @@ def main(out_dir):
                           origin=t.get("origin") or cfg.get("origin"),
                           city=t.get("city", t["id"]), css=t.get("colour") or PALETTE[i % len(PALETTE)],
                           why=t.get("why", ""), when=t.get("when", ""),
-                          cabins=t.get("cabins", ["economy"])))
+                          cabins=t.get("cabins", ["economy"]),
+                          one_way=(not t.get("ret"))))
         i += 1
     for w in (cfg.get("watchlist") or []):
         if not w.get("enabled", True):
@@ -175,7 +193,8 @@ def main(out_dir):
                           why=w.get("why", ""), when=w.get("when", ""),
                           target=w.get("target_rt"), cabins=["economy"]))
         i += 1
-    fares["trips"] = [t for t in trips if t["id"] in used]
+    trips_with_routes = {r["trip"] for r in routes}
+    fares["trips"] = [t for t in trips if t["id"] in trips_with_routes]
     fares["page"] = cfg.get("page") or {}
     fares["origin"] = cfg.get("origin", "DPS")
 

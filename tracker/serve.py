@@ -170,7 +170,8 @@ def op_list():
     cfg = D.load()
     trips = [dict(code=t["id"], city=t.get("city", ""), kind="trip",
                   why=t.get("why", ""), colour=t.get("colour"),
-                  origin=t.get("origin"), out=t["out"]["core"], ret=t["ret"]["core"],
+                  origin=t.get("origin"), out=t["out"]["core"],
+                  ret=(t["ret"]["core"] if t.get("ret") else None),
                   flex=len(t["out"].get("window") or []) // 2,
                   cabins=t.get("cabins", []), enabled=True)
              for t in (cfg.get("trips") or [])]
@@ -216,8 +217,8 @@ def op_add(body):
         D.cmd_watch(a)
     else:
         a["out"] = date(body.get("out"), "outbound date")
-        a["ret"] = date(body.get("ret"), "return date")
-        if a["ret"] < a["out"]:
+        a["ret"] = date(body.get("ret"), "return date") if body.get("ret") else None
+        if a["ret"] and a["ret"] < a["out"]:
             raise Bad("the return is before the outbound")
         if a["out"] < datetime.date.today().isoformat():
             raise Bad("the outbound date is in the past")
@@ -228,6 +229,7 @@ def op_add(body):
         a["cabins"] = ",".join(cabins)
         a["max_stops"] = num(body.get("max_stops", 1), "stops", 0, 3)
         a["source"] = "fastflights" if body.get("source") != "serpapi" else "serpapi"
+        a["id"] = code(body["id"]) if body.get("id") else None
         D.cmd_trip(a)
     return op_list()
 

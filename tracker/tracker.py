@@ -24,6 +24,11 @@ RUN_ID = NOW.strftime("%Y%m%dT%H%M")
 NOTIFY = os.environ.get("FARE_NOTIFY_CMD", "")
 SERP_CLASS = {"economy": 1, "premium-economy": 2, "business": 3}
 
+def legs(t):
+    """Which legs this trip has. A trip without `ret` in its config is a one-way,
+    and only the outbound is priced or reported."""
+    return ("out", "ret") if t.get("ret") else ("out",)
+
 # ---------------------------------------------------------------- storage
 def db():
     c = sqlite3.connect(DB)
@@ -127,7 +132,7 @@ def source_for(trip, leg, date):
 def collect(full_window):
     c = db(); fetches, errors = 0, []
     for t in CFG["trips"]:
-        for leg in ("out", "ret"):
+        for leg in legs(t):
             frm, to = (t["origin"], t["dest"]) if leg == "out" else (t["dest"], t["origin"])
             for date in dates_for(t, leg, full_window):
                 for cabin in t["cabins"]:
@@ -162,7 +167,7 @@ def check_bags(full_window):
     for t in CFG["trips"]:
         sb = t.get("ski_bag")
         if not (sb and sb.get("check_bag_inclusion") and key): continue
-        for leg in ("out", "ret"):
+        for leg in legs(t):
             frm, to = (t["origin"], t["dest"]) if leg == "out" else (t["dest"], t["origin"])
             for cabin in t["cabins"]:
                 r = c.execute("SELECT price, airlines, date, token FROM obs WHERE trip=? AND leg=? AND cabin=? AND run_id=? AND stops<=? AND token IS NOT NULL ORDER BY price LIMIT 1",
@@ -217,14 +222,23 @@ def _desc(r):
 def compute_metrics(run_id=RUN_ID):
     c = db(); out = []
     for t in CFG["trips"]:
+        has_ret = "ret" in legs(t)
         for cabin in t["cabins"]:
-            o, r = _best(c, t["id"], "out", cabin, run_id, t["max_stops"]), _best(c, t["id"], "ret", cabin, run_id, t["max_stops"])
-            qo, qr = _best(c, t["id"], "out", cabin, run_id, t["max_stops"], CFG["quality_max_layover_min"]), _best(c, t["id"], "ret", cabin, run_id, t["max_stops"], CFG["quality_max_layover_min"])
-            r2o, r2r = _best(c, t["id"], "out", cabin, run_id, 2), _best(c, t["id"], "ret", cabin, run_id, 2)
+            o = _best(c, t["id"], "out", cabin, run_id, t["max_stops"])
+            r = _best(c, t["id"], "ret", cabin, run_id, t["max_stops"]) if has_ret else None
+            qo = _best(c, t["id"], "out", cabin, run_id, t["max_stops"], CFG["quality_max_layover_min"])
+            qr = _best(c, t["id"], "ret", cabin, run_id, t["max_stops"], CFG["quality_max_layover_min"]) if has_ret else None
+            r2o = _best(c, t["id"], "out", cabin, run_id, 2)
+            r2r = _best(c, t["id"], "ret", cabin, run_id, 2) if has_ret else None
+            # One-way: total = out only; the "ret" pieces stay None.
+            total = ((o[0] + r[0]) if o and r else None) if has_ret else (o[0] if o else None)
+            qtotal = ((qo[0] + qr[0]) if qo and qr else None) if has_ret else (qo[0] if qo else None)
+            r2total = ((r2o[0] + r2r[0]) if r2o and r2r else None) if has_ret else (r2o[0] if r2o else None)
+            r2desc = (f"{_desc(r2o)} + {_desc(r2r)}" if r2o and r2r else None) if has_ret else _desc(r2o)
             m = dict(run_id=run_id, ts=NOW.isoformat(), trip=t["id"], cabin=cabin,
-                     total=(o[0] + r[0]) if o and r else None, quality_total=(qo[0] + qr[0]) if qo and qr else None,
+                     total=total, quality_total=qtotal,
                      out_price=o[0] if o else None, out_desc=_desc(o), ret_price=r[0] if r else None, ret_desc=_desc(r),
-                     ref2_total=(r2o[0] + r2r[0]) if r2o and r2r else None, ref2_desc=(f"{_desc(r2o)} + {_desc(r2r)}" if r2o and r2r else None),
+                     ref2_total=r2total, ref2_desc=r2desc,
                      q_out_desc=_desc(qo), q_ret_desc=_desc(qr), ski_total=None, ski_note=None, ski_ref2_total=None)
             if t.get("ski_bag"):
                 fo, fr = (ski_fee(t, o[1]) if o else None), (ski_fee(t, r[1]) if r else None)
@@ -256,8 +270,9 @@ def history(trip, cabin):
     rows = c.execute("SELECT ts, total, quality_total FROM metrics WHERE trip=? AND cabin=? AND total IS NOT NULL ORDER BY ts", (trip, cabin)).fetchall()
     last_alert = c.execute("SELECT total FROM alerts WHERE trip=? AND cabin=? ORDER BY ts DESC LIMIT 1", (trip, cabin)).fetchone()
     raw = c.execute("SELECT leg, level, typical_lo, typical_hi, lowest, date FROM insights WHERE trip=? AND cabin=? AND run_id=(SELECT run_id FROM insights WHERE trip=? AND cabin=? ORDER BY ts DESC LIMIT 1)", (trip, cabin, trip, cabin)).fetchall()
-    core = {leg: trip_cfg(trip)[leg]["core"] for leg in ("out", "ret")}
-    ins = [next((r for r in raw if r[0] == leg and r[5] == core[leg]), next((r for r in raw if r[0] == leg), None)) for leg in ("out", "ret")]
+    lgs = legs(trip_cfg(trip))
+    core = {leg: trip_cfg(trip)[leg]["core"] for leg in lgs}
+    ins = [next((r for r in raw if r[0] == leg and r[5] == core[leg]), next((r for r in raw if r[0] == leg), None)) for leg in lgs]
     ins = [r[:5] for r in ins if r]
     c.close(); return rows, (last_alert[0] if last_alert else None), ins
 
@@ -276,17 +291,20 @@ def days_to(tid): return (datetime.date.fromisoformat(trip_cfg(tid)["out"]["core
 def fmt_metric_block(m, rows, last_alert, ins, verbose):
     t = trip_cfg(m["trip"]); bench = rows[0][1] if rows else None
     lo = min(r[1] for r in rows) if rows else None; hi = max(r[1] for r in rows) if rows else None
+    one_way = "ret" not in legs(t)
     lines = [f"*{t['name']} · {m['cabin'].replace('-', ' ')}*  ({days_to(m['trip'])} days to go)"]
     if m["total"] is None:
-        lines.append(f"No itinerary with <= {t['max_stops']} stop in either direction." + (f" Best 2-stop reference: ${m['ref2_total']:,} ({m['ref2_desc']})" if m["ref2_total"] else ""))
+        where = "on this leg" if one_way else "in either direction"
+        lines.append(f"No itinerary with <= {t['max_stops']} stop {where}." + (f" Best 2-stop reference: ${m['ref2_total']:,} ({m['ref2_desc']})" if m["ref2_total"] else ""))
         return "\n".join(lines)
     delta = f" ({(m['total'] - bench) / bench * 100:+.1f}% vs benchmark ${bench:,})" if bench and bench != m["total"] else " (= benchmark)" if bench else ""
-    lines.append(f"Cheapest 1-stop, per person: *${m['total']:,}*{delta}")
-    lines.append(f"  out: {m['out_desc']}"); lines.append(f"  back: {m['ret_desc']}")
-    if m["quality_total"] and (m["quality_total"] != m["total"] or m.get("q_out_desc") != m["out_desc"] or m.get("q_ret_desc") != m["ret_desc"]):
+    lines.append(f"Cheapest {'one-way' if one_way else '1-stop'}, per person: *${m['total']:,}*{delta}")
+    lines.append(f"  out: {m['out_desc']}")
+    if not one_way: lines.append(f"  back: {m['ret_desc']}")
+    if m["quality_total"] and (m["quality_total"] != m["total"] or m.get("q_out_desc") != m["out_desc"] or (not one_way and m.get("q_ret_desc") != m["ret_desc"])):
         lines.append(f"  with layovers <= 6h: ${m['quality_total']:,}")
         if m.get("q_out_desc") != m["out_desc"]: lines.append(f"    out: {m['q_out_desc']}")
-        if m.get("q_ret_desc") != m["ret_desc"]: lines.append(f"    back: {m['q_ret_desc']}")
+        if not one_way and m.get("q_ret_desc") != m["ret_desc"]: lines.append(f"    back: {m['q_ret_desc']}")
     if m["ref2_total"] and m["ref2_total"] < m["total"]: lines.append(f"  cheaper with 2 stops: ${m['ref2_total']:,}" + (f" ({m['ref2_desc']})" if verbose else ""))
     if t.get("ski_bag"):
         if m.get("ski_total"): lines.append(f"  *with ski bag: ${m['ski_total']:,}*" + (f" · 2-stop with ski bag: ${m['ski_ref2_total']:,}" if m.get("ski_ref2_total") else ""))
