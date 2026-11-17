@@ -30,7 +30,11 @@ def one_way(date, frm, to, seat, adults=1, max_stops=1, currency="USD", retries=
             html = fetch_flights_html(q)
             s = LexborHTMLParser(html).css_first(r"script.ds\:1")
             if s is None: raise RuntimeError("no ds:1 block (blocked/consent page?)")
-            payload = json.loads(s.text().split("data:", 1)[1].rsplit(",", 1)[0])
+            txt = s.text()
+            if "data:" not in txt: raise RuntimeError("no data: in ds:1 block")
+            payload, _ = json.JSONDecoder().raw_decode(txt.split("data:", 1)[1].lstrip())
+            if not isinstance(payload, list) or len(payload) <= 3:
+                raise RuntimeError("incomplete ds:1 payload")
             out = []
             for idx, bucket in ((2, "best"), (3, "other")):
                 if payload[idx] and payload[idx][0]:
